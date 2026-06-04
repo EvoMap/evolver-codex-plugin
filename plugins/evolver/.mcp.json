@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "evolver-proxy": {
+      "command": "node",
+      "args": ["./mcp/evolver-proxy.mjs"],
+      "cwd": ".",
+      "env": {
+        "EVOMAP_PROXY_PORT": "19820",
+        "A2A_HUB_URL": "https://evomap.ai"
+      }
+    }
+  }
+}

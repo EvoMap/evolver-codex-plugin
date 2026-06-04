@@ -1,6 +1,12 @@
-# Evolver Codex Plugin
+# EvoMap Codex plugin marketplace
 
-Private EvoMap marketplace repository for the Evolver Codex Desktop plugin.
+Internal EvoMap marketplace repository for the official Evolver Codex Desktop plugin.
+
+## Plugins
+
+| Plugin | Description |
+| --- | --- |
+| [**evolver**](plugins/evolver) | Self-evolution workflows for Codex Desktop: GEP guidance, Evolver CLI setup, and an MCP bridge to the EvoMap Proxy mailbox for Genes and Capsules. Powered by [`@evomap/evolver`](https://github.com/EvoMap/evolver). |
 
 ## Install
 
@@ -18,15 +24,20 @@ codex plugin add evolver@evomap-private
 
 Start a new Codex thread after installation so the bundled skill is loaded.
 
-## Plugin
+## Develop locally
 
-The plugin lives at:
+```bash
+# Validate the plugin manifest and skills
+python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/evolver
 
-```text
-plugins/evolver
+# Try the marketplace from this checkout
+codex plugin marketplace add /Users/seikiko/evolver-codex-plugin
+codex plugin add evolver@evomap-private
 ```
 
-It packages a Codex skill for using Evolver, EvoMap's GEP-powered self-evolution engine, from Codex Desktop.
+## License
+
+The Evolver plugin is GPL-3.0-or-later, matching the upstream engine. See [plugins/evolver/LICENSE](plugins/evolver/LICENSE).
 
 Official Evolver sources:
 
