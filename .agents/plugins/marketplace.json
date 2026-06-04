@@ -1,7 +1,7 @@
 {
-  "name": "evomap-private",
+  "name": "evomap",
   "interface": {
-    "displayName": "EvoMap Private"
+    "displayName": "EvoMap"
   },
   "plugins": [
     {

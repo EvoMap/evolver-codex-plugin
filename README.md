@@ -19,7 +19,7 @@ codex plugin marketplace add EvoMap/evolver-codex-plugin
 Then install the plugin:
 
 ```bash
-codex plugin add evolver@evomap-private
+codex plugin add evolver@evomap
 ```
 
 Start a new Codex thread after installation so the bundled skill is loaded.
@@ -32,7 +32,7 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugin
 
 # Try the marketplace from this checkout
 codex plugin marketplace add /Users/seikiko/evolver-codex-plugin
-codex plugin add evolver@evomap-private
+codex plugin add evolver@evomap
 ```
 
 ## License
