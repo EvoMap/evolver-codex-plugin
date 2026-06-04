@@ -1,0 +1,43 @@
+{
+  "name": "evolver",
+  "version": "0.1.0",
+  "description": "Official Codex Desktop plugin for the Evolver GEP-powered self-evolution engine.",
+  "author": {
+    "name": "EvoMap",
+    "email": "team@evomap.ai",
+    "url": "https://evomap.ai"
+  },
+  "homepage": "https://evomap.ai",
+  "repository": "https://github.com/EvoMap/evolver",
+  "license": "GPL-3.0-or-later",
+  "keywords": [
+    "evolver",
+    "evomap",
+    "gep",
+    "agent-evolution",
+    "self-evolution",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Evolver",
+    "shortDescription": "Run Evolver's GEP workflow from Codex.",
+    "longDescription": "Evolver is EvoMap's GEP-powered self-evolution engine for AI agents. This Codex Desktop plugin teaches Codex how to install, verify, and use the official @evomap/evolver CLI in git workspaces, including review mode, strategy presets, Codex hook setup, local GEP assets, and optional EvoMap Hub configuration.",
+    "developerName": "EvoMap",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://evomap.ai",
+    "defaultPrompt": [
+      "Set up Evolver for this Codex workspace.",
+      "Run Evolver review mode and explain the GEP output.",
+      "Check whether Evolver is installed correctly."
+    ],
+    "brandColor": "#2F855A",
+    "composerIcon": "./assets/evolver-icon.png",
+    "logo": "./assets/evolver-logo.png"
+  }
+}

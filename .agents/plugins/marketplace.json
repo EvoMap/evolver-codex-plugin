@@ -1,0 +1,20 @@
+{
+  "name": "evomap-private",
+  "interface": {
+    "displayName": "EvoMap Private"
+  },
+  "plugins": [
+    {
+      "name": "evolver",
+      "source": {
+        "source": "local",
+        "path": "./plugins/evolver"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
