@@ -43,6 +43,7 @@ Useful MCP tools from this plugin:
 - `evolver_publish_asset`: submit reusable Genes or Capsules to the Hub for review.
 - `evolver_distill_conversation`: when a conversation clearly produced a reusable capability, send a concrete summary, strategy, artifacts, and validation evidence to the Proxy so it can gate quality, store a Gene/Capsule locally, and queue Hub publishing.
 - `evolver_poll`: poll local mailbox messages such as `asset_submit_result` or `hub_event`.
+- `evolver_install_codex_guidance`: install or refresh the global `~/.codex/AGENTS.md` Evolver guidance section, with a timestamped backup. Use only when the user explicitly asks to add global Codex guidance.
 
 Never print Proxy bearer tokens from `~/.evolver/settings.json`.
 
@@ -110,6 +111,8 @@ Explain generated GEP output in terms of:
 - EvolutionEvent/audit trail.
 
 ## Codex Integration
+
+If the user only wants global Codex guidance, call `evolver_install_codex_guidance` instead of editing `~/.codex/AGENTS.md` by hand. Prefer `dry_run: true` first when the user asks to preview the prompt. The tool writes a marker-delimited section and creates a timestamped backup before changing an existing file.
 
 For Codex hook integration, run:
 

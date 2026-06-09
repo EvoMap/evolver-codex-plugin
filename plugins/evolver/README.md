@@ -12,6 +12,7 @@ This plugin packages Evolver as a Codex-ready workflow: a model-invoked skill, a
 | --- | --- | --- |
 | Passive recall | Skill guidance | Prompts Codex to look for past outcomes, local memory, and relevant Genes before starting substantive work. |
 | Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Codex guidance | MCP tool `evolver_install_codex_guidance` | Installs or refreshes the global `~/.codex/AGENTS.md` Evolver guidance section when the user explicitly asks. It makes a timestamped backup before writing. |
 | Active control | CLI workflow | Guides Codex through `evolver`, `evolver --review`, `evolver --loop`, strategy presets, and Codex hook setup. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and auditable events; Codex should not auto-apply generated output unless the user asks. |
 
@@ -55,7 +56,11 @@ Start the Proxy by running `evolver` once inside a git repo.
 
 ## Optional Codex hooks
 
-The plugin gives Codex the `evolver_*` MCP tools. To also install Codex hooks
+The plugin gives Codex the `evolver_*` MCP tools. To add global Codex guidance
+without installing hooks, ask Codex to call `evolver_install_codex_guidance`.
+Use `dry_run: true` first if you want to preview the AGENTS.md section.
+
+To also install Codex hooks
 that inject local evolution memory at session start and record local outcomes at
 session end, install the CLI and run:
 

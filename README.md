@@ -24,6 +24,11 @@ codex plugin add evolver@evomap
 
 Start a new Codex thread after installation so the bundled skill is loaded.
 
+To inject or refresh the global Codex guidance section from the plugin itself,
+ask Codex to call `evolver_install_codex_guidance`. The tool updates
+`~/.codex/AGENTS.md` with marker-delimited Evolver instructions and creates a
+timestamped backup before changing an existing file.
+
 Optional, but recommended when you want the same machine-wide workflow in every
 Codex project:
 

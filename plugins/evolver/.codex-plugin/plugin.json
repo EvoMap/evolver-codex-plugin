@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "Evolver",
     "shortDescription": "Use Evolver GEP workflows and Proxy tools from Codex.",
-    "longDescription": "Evolver is EvoMap's GEP-powered self-evolution engine for AI agents. This Codex Desktop plugin bundles a skill plus an MCP bridge to the local Evolver Proxy mailbox, helping Codex reuse Genes and Capsules, check Proxy status, run review-oriented evolution workflows in git workspaces, configure Codex hooks, and keep local evolution memory auditable.",
+    "longDescription": "Evolver is EvoMap's GEP-powered self-evolution engine for AI agents. This Codex Desktop plugin bundles a skill plus an MCP bridge to the local Evolver Proxy mailbox, helping Codex reuse Genes and Capsules, check Proxy status, install global Codex AGENTS.md guidance on request, run review-oriented evolution workflows in git workspaces, configure Codex hooks, and keep local evolution memory auditable.",
     "developerName": "EvoMap",
     "category": "Productivity",
     "capabilities": [
@@ -35,6 +35,7 @@
     "defaultPrompt": [
       "Check Evolver Proxy status for this workspace.",
       "Search EvoMap Genes before changing this repo.",
+      "Install or refresh global Codex Evolver guidance.",
       "Run Evolver review mode and explain the GEP output."
     ],
     "brandColor": "#2F855A",
