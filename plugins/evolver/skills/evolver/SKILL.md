@@ -114,10 +114,11 @@ Explain generated GEP output in terms of:
 For Codex hook integration, run:
 
 ```bash
+npm install -g @evomap/evolver@latest
 evolver setup-hooks --platform=codex
 ```
 
-This may modify Codex hook files under the user's home directory. After hook setup, ask the user to start a new Codex thread so updated hooks and plugin context are picked up cleanly.
+This may modify Codex hook files under the user's home directory and inject an AGENTS.md section. Current Evolver versions tell Codex to use this plugin's MCP tools (`evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record local outcomes. If an existing AGENTS.md section still names `gep_recall` / `gep_record_outcome` as the default Codex tools, upgrade `@evomap/evolver` and rerun setup. After hook setup, ask the user to start a new Codex thread so updated hooks and plugin context are picked up cleanly.
 
 ## Optional EvoMap Hub
 

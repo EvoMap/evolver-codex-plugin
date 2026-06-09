@@ -53,6 +53,23 @@ http://127.0.0.1:19820
 
 Start the Proxy by running `evolver` once inside a git repo.
 
+## Optional Codex hooks
+
+The plugin gives Codex the `evolver_*` MCP tools. To also install Codex hooks
+that inject local evolution memory at session start and record local outcomes at
+session end, install the CLI and run:
+
+```bash
+npm install -g @evomap/evolver@latest
+evolver setup-hooks --platform=codex
+```
+
+Current hook setup writes an AGENTS.md section that tells Codex to use
+`evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, and
+`evolver_publish_asset`. If an older section mentions `gep_recall` or
+`gep_record_outcome` as the default Codex tools, upgrade `@evomap/evolver` and
+rerun setup.
+
 ## Verify
 
 From a workspace where you want to use Evolver:
