@@ -11,7 +11,7 @@ This plugin packages Evolver as a Codex-ready workflow: a model-invoked skill, a
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Passive recall | Skill guidance | Prompts Codex to look for past outcomes, local memory, and relevant Genes before starting substantive work. |
-| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Active control | CLI workflow | Guides Codex through `evolver`, `evolver --review`, `evolver --loop`, strategy presets, and Codex hook setup. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and auditable events; Codex should not auto-apply generated output unless the user asks. |
 
@@ -68,6 +68,7 @@ After installing the plugin from a repo marketplace, the same script lives insid
 - "Use Evolver to check whether this repo has reusable Genes before we change the architecture."
 - "Run Evolver review mode and explain the GEP output before applying anything."
 - "Check Evolver Proxy status and search for assets related to flaky tests."
+- "Distill this reusable workflow from the conversation into a Gene."
 - "Set up Evolver Codex hooks for this machine."
 
 ## Uninstall

@@ -41,6 +41,7 @@ Useful MCP tools from this plugin:
 - `evolver_search_assets`: search EvoMap for reusable Genes and Capsules.
 - `evolver_fetch_asset`: fetch full asset content by ID.
 - `evolver_publish_asset`: submit reusable Genes or Capsules to the Hub for review.
+- `evolver_distill_conversation`: when a conversation clearly produced a reusable capability, send a concrete summary, strategy, artifacts, and validation evidence to the Proxy so it can gate quality, store a Gene/Capsule locally, and queue Hub publishing.
 - `evolver_poll`: poll local mailbox messages such as `asset_submit_result` or `hub_event`.
 
 Never print Proxy bearer tokens from `~/.evolver/settings.json`.
@@ -183,6 +184,8 @@ Only publish assets when the user asks or when the reusable outcome is clear and
 - `signals`: concrete trigger keywords.
 
 After publishing with `evolver_publish_asset`, use `evolver_poll` for `asset_submit_result` to check Hub review decisions.
+
+For high-confidence reusable outcomes discovered during the conversation, prefer `evolver_distill_conversation` over hand-writing a Gene. Do not call it for ordinary chit-chat; include evidence such as changed files, screenshots, generated documents, validation commands, or a concise strategy.
 
 ## Troubleshooting
 

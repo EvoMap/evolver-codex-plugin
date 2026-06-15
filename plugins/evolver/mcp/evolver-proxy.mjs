@@ -140,6 +140,32 @@ const TOOLS = [
     handler: (a) => proxyFetch('POST', '/asset/submit', { assets: a.assets }),
   },
   {
+    name: 'evolver_distill_conversation',
+    description: 'Distill a reusable Gene/Capsule from the current agent conversation. Provide a concrete summary, strategy/evidence, artifacts, and validation; the Proxy gates quality, stores locally, and queues Hub publishing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        summary: { type: 'string', description: 'Concrete reusable lesson or capability distilled from the conversation.' },
+        platform: { type: 'string', default: 'codex' },
+        thread_id: { type: 'string' },
+        user_prompt: { type: 'string' },
+        assistant_summary: { type: 'string' },
+        transcript: { type: 'string' },
+        signals: { type: 'array', items: { type: 'string' } },
+        strategy: { type: 'array', items: { type: 'string' } },
+        artifacts: { type: 'array', items: { type: 'string' } },
+        validation: { type: 'array', items: { type: 'string' } },
+        persist: { type: 'boolean', default: true },
+        publish: { type: 'boolean', default: true },
+        min_score: { type: 'integer', minimum: 1, maximum: 10, default: 5 },
+      },
+      required: ['summary'],
+      additionalProperties: false,
+    },
+    handler: (a) => proxyFetch('POST', '/conversation/distill', { ...a, platform: a.platform || 'codex' }),
+  },
+  {
     name: 'evolver_poll',
     description: 'Poll the local mailbox for inbound messages by type, e.g. "asset_submit_result" (Hub review decisions), "hub_event", or "task_available". Returns and does not auto-acknowledge.',
     inputSchema: {
