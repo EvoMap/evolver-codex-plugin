@@ -19,6 +19,8 @@ import { createInterface } from 'node:readline';
 
 const SERVER = { name: 'evolver-proxy', version: '0.1.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
+const PROXY_FETCH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_TIMEOUT_MS) || 45_000;
+const PROXY_HEALTH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS) || 2_000;
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
 
@@ -43,7 +45,7 @@ function readProxySettings() {
 async function proxyFetch(method, path, body) {
   const { url: base, token } = readProxySettings();
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  const timer = setTimeout(() => ctrl.abort(), PROXY_FETCH_TIMEOUT_MS);
   try {
     const headers = {};
     if (body) headers['Content-Type'] = 'application/json';
@@ -70,8 +72,35 @@ async function proxyFetch(method, path, body) {
     }
     return { ok: true, data };
   } catch (e) {
+    if (e.name === 'AbortError') {
+      const health = await probeProxyHealth(base, token);
+      if (health.ok) {
+        return {
+          ok: false,
+          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms, but the local Evolver Proxy is running at ${base}. The Hub/upstream call is likely slow; retry the tool call or lower EVOMAP_ASSET_SEARCH_TIMEOUT_MS for faster fallback.`,
+        };
+      }
+      return {
+        ok: false,
+        error: `Proxy request timed out after ${PROXY_FETCH_TIMEOUT_MS}ms and health check failed (${health.error}). Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo, or set EVOMAP_PROXY_PORT if you use a non-default port.`,
+      };
+    }
     const hint = `Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo (the CLI launches the Proxy), or ask Codex to check Evolver status. Set EVOMAP_PROXY_PORT if you use a non-default port.`;
-    return { ok: false, error: `${e.name === 'AbortError' ? 'Proxy request timed out' : 'Proxy connection failed: ' + e.message}. ${hint}` };
+    return { ok: false, error: `Proxy connection failed: ${e.message}. ${hint}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probeProxyHealth(base, token) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PROXY_HEALTH_TIMEOUT_MS);
+  try {
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    const res = await fetch(base + '/proxy/status', { headers, signal: ctrl.signal });
+    return { ok: res.ok, status: res.status, error: res.ok ? null : `HTTP ${res.status}` };
+  } catch (e) {
+    return { ok: false, error: e.name === 'AbortError' ? 'health timeout' : e.message };
   } finally {
     clearTimeout(timer);
   }
