@@ -13,6 +13,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -80,6 +81,12 @@ async function proxyFetch(method, path, body) {
           error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms, but the local Evolver Proxy is running at ${base}. The Hub/upstream call is likely slow; retry the tool call or lower EVOMAP_ASSET_SEARCH_TIMEOUT_MS for faster fallback.`,
         };
       }
+      if (health.reachable) {
+        return {
+          ok: false,
+          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms. The local Evolver Proxy is reachable at ${base}, but its HTTP health check did not complete (${health.error}). The Proxy is likely busy on a slow Hub/upstream call; retry the tool call or lower EVOMAP_ASSET_SEARCH_TIMEOUT_MS for faster fallback.`,
+        };
+      }
       return {
         ok: false,
         error: `Proxy request timed out after ${PROXY_FETCH_TIMEOUT_MS}ms and health check failed (${health.error}). Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo, or set EVOMAP_PROXY_PORT if you use a non-default port.`,
@@ -98,12 +105,42 @@ async function probeProxyHealth(base, token) {
   try {
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
     const res = await fetch(base + '/proxy/status', { headers, signal: ctrl.signal });
-    return { ok: res.ok, status: res.status, error: res.ok ? null : `HTTP ${res.status}` };
+    return { ok: res.ok, reachable: true, status: res.status, error: res.ok ? null : `HTTP ${res.status}` };
   } catch (e) {
-    return { ok: false, error: e.name === 'AbortError' ? 'health timeout' : e.message };
+    const tcp = await probeProxySocket(base);
+    return {
+      ok: false,
+      reachable: tcp.ok,
+      error: e.name === 'AbortError' ? `health timeout; ${tcp.error}` : `${e.message}; ${tcp.error}`,
+    };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function probeProxySocket(base) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let url;
+    try {
+      url = new URL(base);
+    } catch (e) {
+      resolve({ ok: false, error: `invalid proxy url: ${e.message}` });
+      return;
+    }
+    const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+    const socket = connect({ host: url.hostname, port });
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+    socket.setTimeout(PROXY_HEALTH_TIMEOUT_MS);
+    socket.once('connect', () => finish({ ok: true, error: `tcp ${url.hostname}:${port} reachable` }));
+    socket.once('timeout', () => finish({ ok: false, error: `tcp ${url.hostname}:${port} timeout` }));
+    socket.once('error', (e) => finish({ ok: false, error: `tcp ${url.hostname}:${port} ${e.message}` }));
+  });
 }
 
 // ---- Tool registry -------------------------------------------------------
