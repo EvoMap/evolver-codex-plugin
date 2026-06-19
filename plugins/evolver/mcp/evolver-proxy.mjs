@@ -22,6 +22,7 @@ const SERVER = { name: 'evolver-proxy', version: '0.1.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
 const PROXY_FETCH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_TIMEOUT_MS) || 45_000;
 const PROXY_HEALTH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS) || 2_000;
+const MCP_IDLE_EXIT_MS = Number(process.env.EVOMAP_MCP_IDLE_EXIT_MS) || 5 * 60_000;
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
 
@@ -78,13 +79,13 @@ async function proxyFetch(method, path, body) {
       if (health.ok) {
         return {
           ok: false,
-          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms, but the local Evolver Proxy is running at ${base}. The Hub/upstream call is likely slow; retry the tool call or lower EVOMAP_ASSET_SEARCH_TIMEOUT_MS for faster fallback.`,
+          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms, but the local Evolver Proxy is running at ${base}. The Hub/upstream call is likely slow; retry the tool call or set EVOMAP_MCP_PROXY_TIMEOUT_MS to tune this bridge timeout.`,
         };
       }
       if (health.reachable) {
         return {
           ok: false,
-          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms. The local Evolver Proxy is reachable at ${base}, but its HTTP health check did not complete (${health.error}). The Proxy is likely busy on a slow Hub/upstream call; retry the tool call or lower EVOMAP_ASSET_SEARCH_TIMEOUT_MS for faster fallback.`,
+          error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms. The local Evolver Proxy is reachable at ${base}, but its HTTP health check did not complete (${health.error}). The Proxy is likely busy on a slow Hub/upstream call; retry the tool call or set EVOMAP_MCP_PROXY_TIMEOUT_MS to tune this bridge timeout.`,
         };
       }
       return {
@@ -299,9 +300,31 @@ async function dispatch(req) {
 let pending = 0;
 let closed = false;
 function maybeExit() { if (closed && pending === 0) process.exit(0); }
+let idleTimer = null;
+function armIdleExit() {
+  if (!MCP_IDLE_EXIT_MS || MCP_IDLE_EXIT_MS < 0) return;
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (pending === 0) {
+      log(`idle for ${MCP_IDLE_EXIT_MS}ms; exiting so the MCP host can restart a fresh bridge`);
+      process.exit(0);
+    }
+  }, MCP_IDLE_EXIT_MS);
+  idleTimer.unref?.();
+}
+
+function shutdown(signal) {
+  log(`received ${signal}; shutting down`);
+  closed = true;
+  maybeExit();
+}
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGHUP', () => shutdown('SIGHUP'));
 
 const rl = createInterface({ input: process.stdin });
 rl.on('line', (line) => {
+  armIdleExit();
   const trimmed = line.trim();
   if (!trimmed) return;
   let req;
@@ -312,8 +335,9 @@ rl.on('line', (line) => {
       log('dispatch error:', e.message);
       if (req && req.id != null) replyError(req.id, -32603, `Internal error: ${e.message}`);
     })
-    .finally(() => { pending--; maybeExit(); });
+    .finally(() => { pending--; armIdleExit(); maybeExit(); });
 });
 rl.on('close', () => { closed = true; maybeExit(); });
 
 log(`ready (server ${SERVER.version}); proxy base ${readProxySettings().url}`);
+armIdleExit();
