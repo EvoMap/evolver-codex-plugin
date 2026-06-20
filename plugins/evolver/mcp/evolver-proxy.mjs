@@ -12,7 +12,8 @@
  * This bridge never spawns it; when it is down, tools return a helpful error.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +23,10 @@ const SERVER = { name: 'evolver-proxy', version: '0.1.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
 const PROXY_FETCH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_TIMEOUT_MS) || 45_000;
 const PROXY_HEALTH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS) || 2_000;
+const PROXY_AUTOSTART = String(process.env.EVOMAP_MCP_PROXY_AUTOSTART || '1') !== '0';
+const PROXY_START_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_START_TIMEOUT_MS) || 15_000;
 const MCP_IDLE_EXIT_MS = Number(process.env.EVOMAP_MCP_IDLE_EXIT_MS) || 5 * 60_000;
+let proxyStartPromise = null;
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
 
@@ -44,7 +48,7 @@ function readProxySettings() {
   return { url, token };
 }
 
-async function proxyFetch(method, path, body) {
+async function proxyFetch(method, path, body, opts = {}) {
   const { url: base, token } = readProxySettings();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PROXY_FETCH_TIMEOUT_MS);
@@ -88,16 +92,114 @@ async function proxyFetch(method, path, body) {
           error: `Proxy request to ${path} timed out after ${PROXY_FETCH_TIMEOUT_MS}ms. The local Evolver Proxy is reachable at ${base}, but its HTTP health check did not complete (${health.error}). The Proxy is likely busy on a slow Hub/upstream call; retry the tool call or set EVOMAP_MCP_PROXY_TIMEOUT_MS to tune this bridge timeout.`,
         };
       }
+      if (!opts.retriedStart) {
+        const started = await ensureProxyRunning(`timeout on ${path}: ${health.error}`);
+        if (started.ok) return proxyFetch(method, path, body, { retriedStart: true });
+        return {
+          ok: false,
+          error: `Proxy request timed out after ${PROXY_FETCH_TIMEOUT_MS}ms and health check failed (${health.error}). Autostart failed: ${started.error}`,
+        };
+      }
       return {
         ok: false,
         error: `Proxy request timed out after ${PROXY_FETCH_TIMEOUT_MS}ms and health check failed (${health.error}). Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo, or set EVOMAP_PROXY_PORT if you use a non-default port.`,
       };
+    }
+    if (!opts.retriedStart) {
+      const started = await ensureProxyRunning(`connection failure on ${path}: ${e.message}`);
+      if (started.ok) return proxyFetch(method, path, body, { retriedStart: true });
+      return { ok: false, error: `Proxy connection failed: ${e.message}. Autostart failed: ${started.error}` };
     }
     const hint = `Evolver Proxy not reachable at ${base}. Start it by running \`evolver\` once inside a git repo (the CLI launches the Proxy), or ask Codex to check Evolver status. Set EVOMAP_PROXY_PORT if you use a non-default port.`;
     return { ok: false, error: `Proxy connection failed: ${e.message}. ${hint}` };
   } finally {
     clearTimeout(timer);
   }
+}
+
+function resolveEvolverCommand() {
+  if (process.env.EVOLVER_CLI) return process.env.EVOLVER_CLI;
+  for (const candidate of ['/opt/homebrew/bin/evolver', '/usr/local/bin/evolver']) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return 'evolver';
+}
+
+function resolveProxyStarter() {
+  const launcher = join(homedir(), '.evolver', 'evolver-proxy-launcher.js');
+  if (existsSync(launcher)) {
+    return {
+      command: process.execPath,
+      args: [launcher],
+      label: launcher,
+    };
+  }
+  const command = resolveEvolverCommand();
+  return {
+    command,
+    args: ['--loop'],
+    label: command,
+  };
+}
+
+function proxyPortFromBase(base) {
+  try {
+    const parsed = new URL(base);
+    return parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+  } catch {
+    return process.env.EVOMAP_PROXY_PORT || '19820';
+  }
+}
+
+async function ensureProxyRunning(reason) {
+  if (!PROXY_AUTOSTART) return { ok: false, error: 'EVOMAP_MCP_PROXY_AUTOSTART=0' };
+  if (proxyStartPromise) return proxyStartPromise;
+  proxyStartPromise = (async () => {
+    const { url: base, token } = readProxySettings();
+    const health = await probeProxyHealth(base, token);
+    if (health.ok) return { ok: true, started: false };
+
+    const starter = resolveProxyStarter();
+    const port = process.env.EVOMAP_PROXY_PORT || proxyPortFromBase(base);
+    try {
+      const child = spawn(starter.command, starter.args, {
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          EVOMAP_PROXY: '1',
+          A2A_TRANSPORT: 'mailbox',
+          EVOMAP_PROXY_PORT: port,
+          EVOLVER_QUIET_PARENT_GIT: process.env.EVOLVER_QUIET_PARENT_GIT || '1',
+        },
+      });
+      child.unref();
+      log(`autostart requested via ${starter.label} pid=${child.pid || 'unknown'} reason=${reason}`);
+      const spawnError = new Promise((resolve) => {
+        child.once('error', (e) => resolve({ ok: false, error: `failed to spawn ${starter.label}: ${e.message}` }));
+      });
+      const ready = await Promise.race([waitForProxyReady(PROXY_START_TIMEOUT_MS), spawnError]);
+      return ready.ok ? { ok: true, started: true } : ready;
+    } catch (e) {
+      return { ok: false, error: `failed to spawn ${starter.label}: ${e.message}` };
+    }
+  })().finally(() => {
+    proxyStartPromise = null;
+  });
+  return proxyStartPromise;
+}
+
+async function waitForProxyReady(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = 'not checked';
+  while (Date.now() < deadline) {
+    const { url: base, token } = readProxySettings();
+    const health = await probeProxyHealth(base, token);
+    if (health.ok) return { ok: true };
+    lastError = health.error || `HTTP ${health.status || 'unknown'}`;
+    await new Promise((resolve) => setTimeout(resolve, 350));
+  }
+  return { ok: false, error: `Proxy did not become healthy within ${timeoutMs}ms (${lastError})` };
 }
 
 async function probeProxyHealth(base, token) {
