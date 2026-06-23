@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "evolver-proxy": {
-      "command": "/opt/homebrew/bin/node",
+      "command": "/opt/homebrew/opt/node@22/bin/node",
       "args": ["./mcp/evolver-proxy.mjs"],
       "cwd": ".",
       "env": {
