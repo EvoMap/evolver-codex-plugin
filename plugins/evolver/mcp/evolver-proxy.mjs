@@ -25,13 +25,20 @@ const PROXY_FETCH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_TIMEOUT_MS) |
 const PROXY_HEALTH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS) || 2_000;
 const PROXY_AUTOSTART = String(process.env.EVOMAP_MCP_PROXY_AUTOSTART || '1') !== '0';
 const PROXY_START_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_START_TIMEOUT_MS) || 15_000;
-const MCP_IDLE_EXIT_MS = Number(process.env.EVOMAP_MCP_IDLE_EXIT_MS) || 5 * 60_000;
+const MCP_IDLE_EXIT_MS = parseNumberEnv('EVOMAP_MCP_IDLE_EXIT_MS', 5 * 60_000);
 const MAX_FRAME_BYTES = Number(process.env.EVOMAP_MCP_MAX_FRAME_BYTES) || 16 * 1024 * 1024;
 let proxyStartPromise = null;
 const CODEX_GUIDANCE_START = '<!-- evolver-codex-guidance:start -->';
 const CODEX_GUIDANCE_END = '<!-- evolver-codex-guidance:end -->';
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
+
+function parseNumberEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 function codexGuidanceSection(language) {
   if (language === 'zh') {

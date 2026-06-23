@@ -2,7 +2,9 @@
   "mcpServers": {
     "evolver-proxy": {
       "command": "/opt/homebrew/opt/node@22/bin/node",
-      "args": ["./mcp/evolver-proxy.mjs"],
+      "args": [
+        "./mcp/evolver-proxy.mjs"
+      ],
       "cwd": ".",
       "env": {
         "EVOMAP_PROXY_PORT": "19820",
@@ -10,7 +12,8 @@
         "EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS": "2000",
         "NO_PROXY": "127.0.0.1,localhost",
         "no_proxy": "127.0.0.1,localhost",
-        "A2A_HUB_URL": "https://evomap.ai"
+        "A2A_HUB_URL": "https://evomap.ai",
+        "EVOMAP_MCP_IDLE_EXIT_MS": "0"
       }
     }
   }
