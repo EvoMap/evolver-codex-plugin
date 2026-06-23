@@ -12,7 +12,7 @@
  * This bridge never spawns it; when it is down, tools return a helpful error.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
@@ -27,8 +27,121 @@ const PROXY_AUTOSTART = String(process.env.EVOMAP_MCP_PROXY_AUTOSTART || '1') !=
 const PROXY_START_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_START_TIMEOUT_MS) || 15_000;
 const MCP_IDLE_EXIT_MS = Number(process.env.EVOMAP_MCP_IDLE_EXIT_MS) || 5 * 60_000;
 let proxyStartPromise = null;
+const CODEX_GUIDANCE_START = '<!-- evolver-codex-guidance:start -->';
+const CODEX_GUIDANCE_END = '<!-- evolver-codex-guidance:end -->';
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
+
+function codexGuidanceSection(language) {
+  if (language === 'zh') {
+    return `${CODEX_GUIDANCE_START}
+## Evolver 全局指令
+
+- 开始实质性工作前，先调用 \`evolver_status\`；如果 Proxy 正常，再用简短任务信号调用 \`evolver_search_assets\`，优先复用已有 Genes/Capsules。
+- 如果召回到相关资产，用 \`evolver_fetch_asset\` 获取候选内容；只采用与当前任务匹配、可验证的部分。
+- 任务结束后，只有当产出确实可复用为 Gene/Capsule 时才调用 \`evolver_publish_asset\`；普通本地结果由已安装的 Evolver hooks 在 Stop 阶段记录。
+- 如果 MCP 工具不可用、Proxy token 过期或 transport 断开，重启/启动 Evolver Proxy，或在插件/Proxy 更新后开启一个新的 Codex 线程。
+${CODEX_GUIDANCE_END}`;
+  }
+
+  return `${CODEX_GUIDANCE_START}
+## Evolver Global Guidance
+
+- Before substantive work, call \`evolver_status\`; if the Proxy is running, call \`evolver_search_assets\` with concise task signals before designing or editing.
+- If assets match, call \`evolver_fetch_asset\` for promising IDs and apply only the relevant, verifiable guidance.
+- At task end, call \`evolver_publish_asset\` only for genuinely reusable Genes/Capsules; ordinary local outcomes are recorded by installed Evolver hooks when present.
+- If MCP tools are unavailable, the Proxy token is stale, or transport is closed, start/restart the Evolver Proxy or open a new Codex thread after plugin/Proxy changes.
+${CODEX_GUIDANCE_END}`;
+}
+
+function updateCodexGuidanceContent(before, section) {
+  const start = before.indexOf(CODEX_GUIDANCE_START);
+  const end = before.indexOf(CODEX_GUIDANCE_END);
+  if ((start === -1) !== (end === -1) || (start !== -1 && end < start)) {
+    return {
+      ok: false,
+      error: `Malformed Evolver guidance markers in ~/.codex/AGENTS.md. Expected both ${CODEX_GUIDANCE_START} and ${CODEX_GUIDANCE_END}.`,
+    };
+  }
+
+  if (start !== -1) {
+    const replaceEnd = end + CODEX_GUIDANCE_END.length;
+    const next = before.slice(0, start) + section + before.slice(replaceEnd);
+    return { ok: true, content: next, action: 'updated' };
+  }
+
+  const trimmed = before.trimEnd();
+  const prefix = trimmed ? `${trimmed}\n\n` : '';
+  return { ok: true, content: `${prefix}${section}\n`, action: 'inserted' };
+}
+
+function installCodexGuidance(args = {}) {
+  const language = args.language === 'zh' ? 'zh' : 'en';
+  const dryRun = args.dry_run === true;
+  const codexDir = join(homedir(), '.codex');
+  const agentsPath = join(codexDir, 'AGENTS.md');
+  let before = '';
+  let existed = true;
+  try {
+    before = readFileSync(agentsPath, 'utf8');
+  } catch (e) {
+    if (e?.code !== 'ENOENT') {
+      return { ok: false, error: `Could not read ${agentsPath}: ${e.message}` };
+    }
+    existed = false;
+  }
+
+  const section = codexGuidanceSection(language);
+  const updated = updateCodexGuidanceContent(before, section);
+  if (!updated.ok) return { ok: false, error: updated.error };
+
+  const content = updated.content.endsWith('\n') ? updated.content : `${updated.content}\n`;
+  const changed = content !== before;
+  if (dryRun) {
+    return {
+      ok: true,
+      data: {
+        dry_run: true,
+        changed,
+        action: changed ? updated.action : 'unchanged',
+        agents_path: agentsPath,
+        language,
+        section,
+      },
+    };
+  }
+
+  if (!changed) {
+    return {
+      ok: true,
+      data: {
+        changed: false,
+        action: 'unchanged',
+        agents_path: agentsPath,
+        language,
+      },
+    };
+  }
+
+  mkdirSync(codexDir, { recursive: true });
+  let backupPath = null;
+  if (existed) {
+    backupPath = `${agentsPath}.bak.${Math.floor(Date.now() / 1000)}`;
+    writeFileSync(backupPath, before, 'utf8');
+  }
+  writeFileSync(agentsPath, content, 'utf8');
+  return {
+    ok: true,
+    data: {
+      changed: true,
+      action: updated.action,
+      agents_path: agentsPath,
+      backup_path: backupPath,
+      language,
+      restart_recommended: true,
+    },
+  };
+}
 
 /**
  * Resolve the live Proxy connection. ~/.evolver/settings.json is authoritative:
@@ -347,6 +460,19 @@ const TOOLS = [
     },
     handler: (a) => proxyFetch('POST', '/mailbox/poll', { type: a.type, limit: a.limit || 10 }),
   },
+  {
+    name: 'evolver_install_codex_guidance',
+    description: 'Install or update the global Codex ~/.codex/AGENTS.md Evolver guidance section. Creates a timestamped backup before writing. Use only when the user explicitly wants global Codex guidance installed or refreshed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        language: { type: 'string', enum: ['en', 'zh'], default: 'en', description: 'Language for the injected AGENTS.md section.' },
+        dry_run: { type: 'boolean', default: false, description: 'Preview the section and change action without writing files.' },
+      },
+      additionalProperties: false,
+    },
+    handler: installCodexGuidance,
+  },
 ];
 
 const TOOL_BY_NAME = Object.fromEntries(TOOLS.map(t => [t.name, t]));
@@ -380,7 +506,7 @@ async function dispatch(req) {
         protocolVersion: params?.protocolVersion || DEFAULT_PROTOCOL,
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: 'Evolver Proxy bridge. Use evolver_search_assets before substantive work to reuse proven genes/capsules; evolver_status to check the Proxy; evolver_publish_asset to contribute new ones.',
+        instructions: 'Evolver Proxy bridge. Use evolver_search_assets before substantive work to reuse proven genes/capsules; evolver_status to check the Proxy; evolver_publish_asset to contribute new ones. Use evolver_install_codex_guidance only when the user explicitly wants global Codex AGENTS.md guidance installed or refreshed.',
       });
     case 'notifications/initialized':
     case 'initialized':

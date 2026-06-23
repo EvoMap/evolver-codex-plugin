@@ -24,6 +24,26 @@ codex plugin add evolver@evomap
 
 Start a new Codex thread after installation so the bundled skill is loaded.
 
+To inject or refresh the global Codex guidance section from the plugin itself,
+ask Codex to call `evolver_install_codex_guidance`. The tool updates
+`~/.codex/AGENTS.md` with marker-delimited Evolver instructions and creates a
+timestamped backup before changing an existing file.
+
+Optional, but recommended when you want the same machine-wide workflow in every
+Codex project:
+
+```bash
+npm install -g @evomap/evolver@latest
+evolver setup-hooks --platform=codex
+```
+
+That installs Codex hooks and an AGENTS.md section. Current Evolver versions tell
+Codex to use this plugin's MCP tools (`evolver_status`, `evolver_search_assets`,
+`evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record
+local outcomes. If an older AGENTS.md section still says to call
+`gep_recall` / `gep_record_outcome`, upgrade `@evomap/evolver` and rerun
+`evolver setup-hooks --platform=codex`.
+
 ## Develop locally
 
 ```bash
