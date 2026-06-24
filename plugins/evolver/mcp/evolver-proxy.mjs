@@ -5,7 +5,8 @@
  * Exposes the EvoMap local Proxy mailbox — genes, capsules, status — as MCP
  * tools so Codex can search/reuse/publish evolution assets natively.
  *
- * Transport: newline-delimited JSON-RPC 2.0 over stdin/stdout (MCP stdio).
+ * Transport: MCP Content-Length frames, with newline-delimited JSON-RPC kept
+ * for older hosts. Replies use the same framing as the incoming request.
  * All diagnostics go to stderr; stdout carries protocol traffic ONLY.
  *
  * The Proxy is a separate local process started by the @evomap/evolver CLI.
@@ -17,7 +18,6 @@ import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 
 const SERVER = { name: 'evolver-proxy', version: '0.1.0' };
 const DEFAULT_PROTOCOL = '2025-06-18';
@@ -25,12 +25,20 @@ const PROXY_FETCH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_TIMEOUT_MS) |
 const PROXY_HEALTH_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_HEALTH_TIMEOUT_MS) || 2_000;
 const PROXY_AUTOSTART = String(process.env.EVOMAP_MCP_PROXY_AUTOSTART || '1') !== '0';
 const PROXY_START_TIMEOUT_MS = Number(process.env.EVOMAP_MCP_PROXY_START_TIMEOUT_MS) || 15_000;
-const MCP_IDLE_EXIT_MS = Number(process.env.EVOMAP_MCP_IDLE_EXIT_MS) || 5 * 60_000;
+const MCP_IDLE_EXIT_MS = parseNumberEnv('EVOMAP_MCP_IDLE_EXIT_MS', 5 * 60_000);
+const MAX_FRAME_BYTES = Number(process.env.EVOMAP_MCP_MAX_FRAME_BYTES) || 16 * 1024 * 1024;
 let proxyStartPromise = null;
 const CODEX_GUIDANCE_START = '<!-- evolver-codex-guidance:start -->';
 const CODEX_GUIDANCE_END = '<!-- evolver-codex-guidance:end -->';
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
+
+function parseNumberEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
 
 function codexGuidanceSection(language) {
   if (language === 'zh') {
@@ -479,7 +487,16 @@ const TOOL_BY_NAME = Object.fromEntries(TOOLS.map(t => [t.name, t]));
 
 // ---- JSON-RPC plumbing ---------------------------------------------------
 
-function send(msg) { process.stdout.write(JSON.stringify(msg) + '\n'); }
+let outputFraming = 'jsonl';
+
+function send(msg) {
+  const payload = JSON.stringify(msg);
+  if (outputFraming === 'content-length') {
+    process.stdout.write(`Content-Length: ${Buffer.byteLength(payload, 'utf8')}\r\n\r\n${payload}`);
+    return;
+  }
+  process.stdout.write(payload + '\n');
+}
 function reply(id, result) { send({ jsonrpc: '2.0', id, result }); }
 function replyError(id, code, message) { send({ jsonrpc: '2.0', id, error: { code, message } }); }
 
@@ -550,10 +567,10 @@ process.once('SIGTERM', () => shutdown('SIGTERM'));
 process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGHUP', () => shutdown('SIGHUP'));
 
-const rl = createInterface({ input: process.stdin });
-rl.on('line', (line) => {
+function handleJsonRpcText(text, framing) {
   armIdleExit();
-  const trimmed = line.trim();
+  outputFraming = framing;
+  const trimmed = text.trim();
   if (!trimmed) return;
   let req;
   try { req = JSON.parse(trimmed); } catch { log('dropping non-JSON line'); return; }
@@ -564,8 +581,84 @@ rl.on('line', (line) => {
       if (req && req.id != null) replyError(req.id, -32603, `Internal error: ${e.message}`);
     })
     .finally(() => { pending--; armIdleExit(); maybeExit(); });
+}
+
+let inputBuffer = Buffer.alloc(0);
+let inputEnded = false;
+
+function headerEndOffset(buffer) {
+  const crlf = buffer.indexOf('\r\n\r\n');
+  if (crlf >= 0) return { headerEnd: crlf, bodyStart: crlf + 4 };
+  const lf = buffer.indexOf('\n\n');
+  if (lf >= 0) return { headerEnd: lf, bodyStart: lf + 2 };
+  return null;
+}
+
+function contentLengthFrom(headerText) {
+  for (const line of headerText.split(/\r?\n/)) {
+    const match = line.match(/^Content-Length:\s*(\d+)\s*$/i);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
+function startsWithHeaderFrame(value) {
+  const text = Buffer.isBuffer(value)
+    ? value.toString('utf8', 0, Math.min(value.length, 128))
+    : String(value);
+  return /^[A-Za-z-]+:\s*/.test(text);
+}
+
+function processInputBuffer() {
+  while (inputBuffer.length > 0) {
+    if (startsWithHeaderFrame(inputBuffer)) {
+      const offsets = headerEndOffset(inputBuffer);
+      if (!offsets) return;
+      const headerText = inputBuffer.subarray(0, offsets.headerEnd).toString('ascii');
+      const length = contentLengthFrom(headerText);
+      if (!Number.isFinite(length) || length < 0 || length > MAX_FRAME_BYTES) {
+        log('dropping invalid Content-Length frame');
+        inputBuffer = Buffer.alloc(0);
+        return;
+      }
+      if (inputBuffer.length < offsets.bodyStart + length) return;
+      const body = inputBuffer.subarray(offsets.bodyStart, offsets.bodyStart + length).toString('utf8');
+      inputBuffer = inputBuffer.subarray(offsets.bodyStart + length);
+      handleJsonRpcText(body, 'content-length');
+      continue;
+    }
+
+    const newline = inputBuffer.indexOf('\n');
+    if (newline < 0) return;
+    const line = inputBuffer.subarray(0, newline).toString('utf8');
+    inputBuffer = inputBuffer.subarray(newline + 1);
+    handleJsonRpcText(line, 'jsonl');
+  }
+}
+
+function finishInput() {
+  if (inputEnded) return;
+  inputEnded = true;
+  processInputBuffer();
+  const leftover = inputBuffer.toString('utf8').trim();
+  if (leftover && !startsWithHeaderFrame(leftover)) {
+    handleJsonRpcText(leftover, 'jsonl');
+  } else if (leftover) {
+    log('stdin closed with a partial Content-Length frame');
+  }
+  inputBuffer = Buffer.alloc(0);
+  closed = true;
+  maybeExit();
+}
+
+process.stdin.on('data', (chunk) => {
+  armIdleExit();
+  inputBuffer = Buffer.concat([inputBuffer, chunk]);
+  processInputBuffer();
 });
-rl.on('close', () => { closed = true; maybeExit(); });
+process.stdin.on('error', (err) => log('stdin error:', err.message));
+process.stdin.on('end', finishInput);
+process.stdin.on('close', finishInput);
 
 log(`ready (server ${SERVER.version}); proxy base ${readProxySettings().url}`);
 armIdleExit();
