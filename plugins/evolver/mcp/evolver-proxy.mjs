@@ -33,6 +33,33 @@ const CODEX_GUIDANCE_END = '<!-- evolver-codex-guidance:end -->';
 
 function log(...a) { process.stderr.write('[evolver-proxy-mcp] ' + a.join(' ') + '\n'); }
 
+function defaultProxyUrl() {
+  return `http://127.0.0.1:${process.env.EVOMAP_PROXY_PORT || '19820'}`;
+}
+
+function isLoopbackHost(hostname) {
+  const value = String(hostname || '').toLowerCase();
+  return (
+    value === 'localhost' ||
+    value === '127.0.0.1' ||
+    value === '::1' ||
+    value.endsWith('.localhost')
+  );
+}
+
+function normalizeLocalProxyUrl(raw) {
+  try {
+    const parsed = new URL(String(raw));
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    if (!isLoopbackHost(parsed.hostname)) return null;
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    parsed.hash = '';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return null;
+  }
+}
+
 function parseNumberEnv(name, fallback) {
   const raw = process.env[name];
   if (raw === undefined || raw === '') return fallback;
@@ -162,10 +189,13 @@ function readProxySettings() {
   let url = null, token = null;
   try {
     const s = JSON.parse(readFileSync(join(homedir(), '.evolver', 'settings.json'), 'utf8'));
-    if (s?.proxy?.url) url = String(s.proxy.url).replace(/\/+$/, '');
+    if (s?.proxy?.url) url = normalizeLocalProxyUrl(s.proxy.url);
     if (s?.proxy?.token) token = String(s.proxy.token);
   } catch { /* not running / unreadable — fall through */ }
-  if (!url) url = `http://127.0.0.1:${process.env.EVOMAP_PROXY_PORT || '19820'}`;
+  if (!url) {
+    url = defaultProxyUrl();
+    token = null;
+  }
   return { url, token };
 }
 
