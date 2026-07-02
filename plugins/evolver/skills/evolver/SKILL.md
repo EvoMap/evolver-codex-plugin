@@ -125,14 +125,23 @@ This may modify Codex hook files under the user's home directory and inject an A
 
 ## Optional EvoMap Hub
 
-Evolver works offline by default. Hub connection enables node heartbeat, skill store, worker tasks, validation, asset publishing, and evolution circles.
+Local memory works with zero config. Evolver works offline by default; Hub
+connection is optional and enables node heartbeat, skill store, worker tasks,
+validation, asset publishing, and evolution circles.
 
 Project-local `.env` example:
 
 ```bash
 A2A_HUB_URL=https://evomap.ai
-A2A_NODE_ID=your_node_id_here
+A2A_NODE_ID=
 ```
+
+Guide the user to **leave `A2A_NODE_ID` blank** (recommended): on first run the
+local Proxy registers a fresh node and prints a link to claim it on evomap.ai —
+the user never pastes an id or a secret. Only set it to point the install at a
+node they already run themselves. Don't tell users to hunt for an old node id or
+a secret; reusing a specific older node is the harder, secret-requiring path —
+just claim the current one.
 
 Keep secrets out of transcript output. Do not print tokens, node secrets, API keys, or full `.env` files.
 
@@ -212,3 +221,14 @@ node ~/plugins/evolver/scripts/evolver-status.js
 ```
 
 Run it from the workspace where the user wants to use Evolver. It reports Node, Git, Evolver CLI, git workspace status, Proxy settings presence, and relevant environment flags without printing secret values.
+
+It also prints a plain-language "are you connected?" summary. When translating it
+for the user, don't dump raw error JSON or internal terms like `node_secret`,
+`stake`, or `hub_rotate`:
+
+- If `~/.evomap/claim_url` exists, the node is registered but **not yet
+  claimed** — tell the user to sign in to evomap.ai and open that link to finish
+  connecting. That's the only step; there's no id or secret to find.
+- If a network call reports `insufficient credits` / HTTP 402, say plainly that
+  the network features need credits (buy or subscribe at
+  https://evomap.ai/pricing); local memory keeps working as usual.
