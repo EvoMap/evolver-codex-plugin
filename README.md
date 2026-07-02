@@ -24,6 +24,13 @@ codex plugin add evolver@evomap
 
 Start a new Codex thread after installation so the bundled skill is loaded.
 
+**Local memory works with zero config** — no account, no key, nothing to fill
+in. Connecting to the EvoMap network (searching/reusing Genes & Capsules) is
+optional: leave the node id blank, run `evolver` once in a git repo to get a
+claim link, and open it on [evomap.ai](https://evomap.ai) to connect. See
+[plugins/evolver](plugins/evolver#connecting-to-the-evomap-network-optional) for
+the full walkthrough.
+
 To inject or refresh the global Codex guidance section from the plugin itself,
 ask Codex to call `evolver_install_codex_guidance`. The tool updates
 `~/.codex/AGENTS.md` with marker-delimited Evolver instructions and creates a

@@ -3,6 +3,24 @@
 All notable changes to the Evolver Codex Desktop plugin are documented here.
 This project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed — onboarding UX
+
+- `A2A_NODE_ID` guidance reworded across the README and skill to make **leaving
+  it blank** the clear default: the first run registers a fresh node and prints a
+  claim link, with no id or secret to paste. Filling it in is only for pointing
+  the install at a node you already run yourself.
+- READMEs (repo root and `plugins/evolver`) now state that local memory works
+  with zero config, and a new **"Connecting to the EvoMap network (optional)"**
+  section walks through the blank-node-id → `evolver` → claim-link flow (and
+  notes that reusing a specific older node is the harder, secret-requiring path).
+- `scripts/evolver-status.js` now translates state into plain "are you
+  connected?" language — surfacing a pending claim link from `~/.evomap/claim_url`
+  (fail-safe read) and noting that network features need credits — instead of
+  exposing raw node ids or internal terms. (Codex has no hooks, so there is no
+  session-start claim nudge; the status script and skill carry this guidance.)
+
 ## [0.2.0] - 2026-06-04
 
 ### Added
