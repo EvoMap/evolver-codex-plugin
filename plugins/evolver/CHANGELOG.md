@@ -5,6 +5,11 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`
+  against Proxy `/recipe/search` and `/recipe/express`. `evolver_search_assets`
+  remains as Gene/Capsule fallback when no Recipe hits.
+
 ### Changed — onboarding UX
 
 - `A2A_NODE_ID` guidance reworded across the README and skill to make **leaving

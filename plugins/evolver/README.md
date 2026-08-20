@@ -11,7 +11,7 @@ This plugin packages Evolver as a Codex-ready workflow: a model-invoked skill, a
 | Layer | Mechanism | Behavior |
 | --- | --- | --- |
 | Passive recall | Skill guidance | Prompts Codex to look for past outcomes, local memory, and relevant Genes before starting substantive work. |
-| Network bridge | MCP server `evolver-proxy` | Exposes `evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
+| Network bridge | MCP server `evolver-proxy` | Exposes Recipe-first `evolver_recipe_search` / `evolver_recipe_express`, then fallback `evolver_search_assets`, plus `evolver_status`, `evolver_fetch_asset`, `evolver_publish_asset`, `evolver_distill_conversation`, and `evolver_poll` through the local EvoMap Proxy mailbox. |
 | Codex guidance | MCP tool `evolver_install_codex_guidance` | Installs or refreshes the global `~/.codex/AGENTS.md` Evolver guidance section when the user explicitly asks. It makes a timestamped backup before writing. |
 | Active control | CLI workflow | Guides Codex through `evolver`, `evolver --review`, `evolver --loop`, strategy presets, and Codex hook setup. |
 | Safety boundary | Git + review | Evolver emits protocol-bound GEP prompts and auditable events; Codex should not auto-apply generated output unless the user asks. |
@@ -99,7 +99,7 @@ evolver setup-hooks --platform=codex
 ```
 
 Current hook setup writes an AGENTS.md section that tells Codex to use
-`evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, and
+`evolver_status`, `evolver_recipe_search`, `evolver_recipe_express`, fallback `evolver_search_assets`, `evolver_fetch_asset`, and
 `evolver_publish_asset`. If an older section mentions `gep_recall` or
 `gep_record_outcome` as the default Codex tools, upgrade `@evomap/evolver` and
 rerun setup.
