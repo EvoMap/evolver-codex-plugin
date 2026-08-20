@@ -45,8 +45,8 @@ evolver setup-hooks --platform=codex
 ```
 
 That installs Codex hooks and an AGENTS.md section. Current Evolver versions tell
-Codex to use this plugin's MCP tools (`evolver_status`, `evolver_search_assets`,
-`evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record
+Codex to use this plugin's MCP tools (`evolver_status`, `evolver_recipe_search`,
+`evolver_recipe_express`, fallback `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record
 local outcomes. If an older AGENTS.md section still says to call
 `gep_recall` / `gep_record_outcome`, upgrade `@evomap/evolver` and rerun
 `evolver setup-hooks --platform=codex`.

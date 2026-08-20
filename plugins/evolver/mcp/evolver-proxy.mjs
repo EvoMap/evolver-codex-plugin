@@ -2,7 +2,7 @@
 /**
  * Evolver Proxy MCP bridge (stdio, zero dependencies).
  *
- * Exposes the EvoMap local Proxy mailbox — genes, capsules, status — as MCP
+ * Exposes the EvoMap local Proxy mailbox — recipes, genes, capsules, status — as MCP
  * tools so Codex can search/reuse/publish evolution assets natively.
  *
  * Transport: MCP Content-Length frames, with newline-delimited JSON-RPC kept
@@ -72,7 +72,7 @@ function codexGuidanceSection(language) {
     return `${CODEX_GUIDANCE_START}
 ## Evolver 全局指令
 
-- 开始实质性工作前，先调用 \`evolver_status\`；如果 Proxy 正常，再用简短任务信号调用 \`evolver_search_assets\`，优先复用已有 Genes/Capsules。
+- 开始实质性工作前，先调用 \`evolver_status\`；如果 Proxy 正常，先 \`evolver_recipe_search\` 再 \`evolver_recipe_express\`。无 Recipe 命中时才用 \`evolver_search_assets\` 作为 Gene/Capsule fallback。
 - 如果召回到相关资产，用 \`evolver_fetch_asset\` 获取候选内容；只采用与当前任务匹配、可验证的部分。
 - 任务结束后，只有当产出确实可复用为 Gene/Capsule 时才调用 \`evolver_publish_asset\`；普通本地结果由已安装的 Evolver hooks 在 Stop 阶段记录。
 - 如果 MCP 工具不可用、Proxy token 过期或 transport 断开，重启/启动 Evolver Proxy，或在插件/Proxy 更新后开启一个新的 Codex 线程。
@@ -82,7 +82,7 @@ ${CODEX_GUIDANCE_END}`;
   return `${CODEX_GUIDANCE_START}
 ## Evolver Global Guidance
 
-- Before substantive work, call \`evolver_status\`; if the Proxy is running, call \`evolver_search_assets\` with concise task signals before designing or editing.
+- Before substantive work, call \`evolver_status\`; if the Proxy is running, call \`evolver_recipe_search\` then \`evolver_recipe_express\`. Fall back to \`evolver_search_assets\` only when no Recipe matches.
 - If assets match, call \`evolver_fetch_asset\` for promising IDs and apply only the relevant, verifiable guidance.
 - At task end, call \`evolver_publish_asset\` only for genuinely reusable Genes/Capsules; ordinary local outcomes are recorded by installed Evolver hooks when present.
 - If MCP tools are unavailable, the Proxy token is stale, or transport is closed, start/restart the Evolver Proxy or open a new Codex thread after plugin/Proxy changes.
@@ -407,8 +407,59 @@ const TOOLS = [
     handler: () => proxyFetch('GET', '/proxy/status'),
   },
   {
+    name: 'evolver_recipe_search',
+    description: 'Default first step: search Hub Recipes (ordered Gene/Capsule DNA) via the local Evolver Proxy. On a hit, call evolver_recipe_express. If nothing matches, fall back to evolver_search_assets. Omit q to list published Recipes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Free-text Recipe query. Omit to list published Recipes.' },
+        query: { type: 'string', description: 'Alias of q.' },
+        text: { type: 'string', description: 'Alias of q.' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
+        cursor: { type: 'string' },
+        sort: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const q = [a.q, a.query, a.text].find((value) => typeof value === 'string' && value.trim().length > 0);
+      return proxyFetch('POST', '/recipe/search', {
+        ...(q ? { q } : {}),
+        ...(typeof a.limit === 'number' ? { limit: a.limit } : {}),
+        ...(typeof a.cursor === 'string' && a.cursor.trim() ? { cursor: a.cursor } : {}),
+        ...(typeof a.sort === 'string' && a.sort.trim() ? { sort: a.sort } : {}),
+      });
+    },
+  },
+  {
+    name: 'evolver_recipe_express',
+    description: 'Express a Hub Recipe by id. Forwards only to Proxy POST /recipe/express (Hub POST /a2a/recipe/{id}/express). Hub unfolds Gene then Capsule steps; do not parse recipe JSON locally. Prefer this after evolver_recipe_search.',
+    inputSchema: {
+      type: 'object',
+      required: ['recipeId'],
+      properties: {
+        recipeId: { type: 'string', description: 'Hub Recipe id from evolver_recipe_search.' },
+        inputPayload: { type: 'object', description: 'Optional JSON object forwarded as input_payload.' },
+      },
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const recipeId = typeof a.recipeId === 'string' ? a.recipeId.trim() : '';
+      if (!recipeId) {
+        return Promise.resolve({ ok: false, error: 'Provide a `recipeId` from evolver_recipe_search.' });
+      }
+      const inputPayload = a.inputPayload && typeof a.inputPayload === 'object' && !Array.isArray(a.inputPayload)
+        ? a.inputPayload
+        : undefined;
+      return proxyFetch('POST', '/recipe/express', {
+        recipe_id: recipeId,
+        ...(inputPayload ? { input_payload: inputPayload } : {}),
+      });
+    },
+  },
+  {
     name: 'evolver_search_assets',
-    description: 'Search the EvoMap network for reusable evolution assets (Genes and Capsules) that match the given signals. Call this BEFORE starting substantive work to reuse proven approaches instead of reinventing them.',
+    description: 'Fallback: search the EvoMap network for Genes and Capsules when evolver_recipe_search has no Recipe hit. Pass `query` and/or `signals`. Real networked reuse should go through evolver_recipe_express so Hub unfolds the steps.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -553,7 +604,7 @@ async function dispatch(req) {
         protocolVersion: params?.protocolVersion || DEFAULT_PROTOCOL,
         capabilities: { tools: {} },
         serverInfo: SERVER,
-        instructions: 'Evolver Proxy bridge. Use evolver_search_assets before substantive work to reuse proven genes/capsules; evolver_status to check the Proxy; evolver_publish_asset to contribute new ones. Use evolver_install_codex_guidance only when the user explicitly wants global Codex AGENTS.md guidance installed or refreshed.',
+        instructions: 'Evolver Proxy bridge. Use evolver_recipe_search then evolver_recipe_express before substantive networked work. evolver_search_assets is Gene/Capsule fallback when no Recipe hits. evolver_status to check the Proxy; evolver_publish_asset to contribute new ones. Use evolver_install_codex_guidance only when the user explicitly wants global Codex AGENTS.md guidance installed or refreshed.',
       });
     case 'notifications/initialized':
     case 'initialized':

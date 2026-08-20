@@ -31,14 +31,16 @@ Important boundary:
 For substantive repo work, check whether Evolver context is available before inventing a new approach:
 
 1. If the `evolver-proxy` MCP tools are available, call `evolver_status`.
-2. If the Proxy is running and the task has reusable signals, call `evolver_search_assets` with concise signal keywords.
-3. If assets are returned, fetch promising IDs with `evolver_fetch_asset` and summarize how they apply.
+2. If the Proxy is running, call `evolver_recipe_search` with the task text, then `evolver_recipe_express` on a matching Recipe id. Hub unfolds Gene then Capsule steps; do not parse recipe JSON locally.
+3. Only if no Recipe matches, call `evolver_search_assets` with concise signal keywords or a free-text query, then `evolver_fetch_asset`.
 4. If MCP tools are unavailable or Proxy is down, fall back to CLI/status checks and explain how to start the Proxy.
 
 Useful MCP tools from this plugin:
 
 - `evolver_status`: check Proxy state, node identity, pending mailbox counts, and last Hub sync.
-- `evolver_search_assets`: search EvoMap for reusable Genes and Capsules.
+- `evolver_recipe_search`: default first step — search Hub Recipes (ordered Gene/Capsule DNA).
+- `evolver_recipe_express`: express a Recipe by id; Hub unfolds the steps.
+- `evolver_search_assets`: fallback search for Genes and Capsules when no Recipe matches.
 - `evolver_fetch_asset`: fetch full asset content by ID.
 - `evolver_publish_asset`: submit reusable Genes or Capsules to the Hub for review.
 - `evolver_distill_conversation`: when a conversation clearly produced a reusable capability, send a concrete summary, strategy, artifacts, and validation evidence to the Proxy so it can gate quality, store a Gene/Capsule locally, and queue Hub publishing.
@@ -121,7 +123,7 @@ npm install -g @evomap/evolver@latest
 evolver setup-hooks --platform=codex
 ```
 
-This may modify Codex hook files under the user's home directory and inject an AGENTS.md section. Current Evolver versions tell Codex to use this plugin's MCP tools (`evolver_status`, `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record local outcomes. If an existing AGENTS.md section still names `gep_recall` / `gep_record_outcome` as the default Codex tools, upgrade `@evomap/evolver` and rerun setup. After hook setup, ask the user to start a new Codex thread so updated hooks and plugin context are picked up cleanly.
+This may modify Codex hook files under the user's home directory and inject an AGENTS.md section. Current Evolver versions tell Codex to use this plugin's MCP tools (`evolver_status`, `evolver_recipe_search`, `evolver_recipe_express`, fallback `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record local outcomes. If an existing AGENTS.md section still names `gep_recall` / `gep_record_outcome` as the default Codex tools, upgrade `@evomap/evolver` and rerun setup. After hook setup, ask the user to start a new Codex thread so updated hooks and plugin context are picked up cleanly.
 
 ## Optional EvoMap Hub
 
