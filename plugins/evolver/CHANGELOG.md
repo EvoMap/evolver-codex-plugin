@@ -5,6 +5,10 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- Resolve Node.js from `PATH` when starting the MCP bridge so installations
+  without the macOS Homebrew Node.js 22 path can launch it.
+
 ### Changed
 - MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`
   against Proxy `/recipe/search` and `/recipe/express`. `evolver_search_assets`
