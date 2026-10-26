@@ -52,11 +52,10 @@ test("the person's own MCP servers are turned off by name for the distillation",
   assert.deepEqual(args.slice(-5), ['-m', 'gpt-test', '-C', '/tmp/x', '-']);
 });
 
-test('only enabled MCP servers with a plain name are taken from the listing; an unreadable listing is no list', () => {
-  const listing = JSON.stringify([
-    { name: 'node_repl', enabled: true }, { name: 'codex_app', enabled: false }, { name: 'bad name"]', enabled: true },
-  ]);
+test('enabled MCP servers are taken from the listing; an unreadable one, or one naming an unaddressable enabled server, is no list', () => {
+  const listing = JSON.stringify([{ name: 'node_repl', enabled: true }, { name: 'codex_app', enabled: false }, { name: 'off name"]', enabled: false }]);
   assert.deepEqual(enabledMcpServersOf(listing), ['node_repl']);
+  assert.equal(enabledMcpServersOf(JSON.stringify([{ name: 'bad name"]', enabled: true }])), null, 'an enabled server no override can name');
   assert.deepEqual(enabledMcpServersOf('[]'), []);
   assert.equal(enabledMcpServersOf('Error: failed to load'), null);
   assert.equal(enabledMcpServersOf('{}'), null);
@@ -99,5 +98,13 @@ test('a distillation cancelled before its MCP servers are listed does not start 
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(codexModelRunner({ executable: FAKE_CODEX })('gpt-test', 'p', controller.signal), { code: 'ABORT_ERR' });
+  assert.deepEqual(execCalls(), []);
+});
+
+test('a listing from a codex that exited non-zero is no list, whatever it printed', async (t) => {
+  t.after(freshHome());
+  process.env.FAKE_CODEX_MCP_EXIT = '2';
+  t.after(() => delete process.env.FAKE_CODEX_MCP_EXIT);
+  await assert.rejects(codexModelRunner({ executable: FAKE_CODEX })('gpt-test', 'p', AbortSignal.timeout(5_000)), /could not list the MCP servers/);
   assert.deepEqual(execCalls(), []);
 });

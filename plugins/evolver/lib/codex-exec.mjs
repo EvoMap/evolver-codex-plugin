@@ -79,12 +79,16 @@ function startCodex(executable, args) {
   return { child, stop };
 }
 
-/** The enabled MCP servers a `codex mcp list --json` listing names, or null when the listing cannot be read. */
+/**
+ * The enabled MCP servers a `codex mcp list --json` listing names, or null when the listing cannot be read or
+ * names an enabled server no `-c mcp_servers.<name>` override can address.
+ */
 export function enabledMcpServersOf(listJson) {
   try {
     const servers = JSON.parse(listJson);
     if (!Array.isArray(servers)) return null;
-    return servers.filter((server) => server?.enabled === true && MCP_SERVER_NAME.test(String(server.name))).map((server) => server.name);
+    const enabled = servers.filter((server) => server?.enabled === true).map((server) => String(server.name));
+    return enabled.every((name) => MCP_SERVER_NAME.test(name)) ? enabled : null;
   } catch {
     return null;
   }
@@ -110,9 +114,9 @@ function enabledMcpServers(executable, signal) {
       settle();
       reject(failure(error.message, error.code));
     });
-    child.on('close', () => {
+    child.on('close', (code) => {
       settle();
-      const servers = enabledMcpServersOf(stdout);
+      const servers = code === 0 ? enabledMcpServersOf(stdout) : null;
       if (signal?.aborted) reject(failure('cancelled', 'ABORT_ERR'));
       else if (servers === null) reject(failure('could not list the MCP servers to turn off for the distillation'));
       else resolve(servers);

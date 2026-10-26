@@ -7,7 +7,7 @@ const GENE = { title: 'Retry uploads', summary: 'Retry a flaky upload with backo
 
 if (process.argv.includes('mcp')) {
   process.stdout.write(process.env.FAKE_CODEX_MCP ?? JSON.stringify([{ name: 'node_repl', enabled: true }, { name: 'codex_app', enabled: false }]));
-  process.exit(0);
+  process.exit(Number(process.env.FAKE_CODEX_MCP_EXIT ?? 0));
 }
 
 const prompt = readFileSync(0, 'utf8');
