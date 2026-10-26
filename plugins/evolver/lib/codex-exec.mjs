@@ -3,19 +3,28 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { cmdArgument, endTree } from './commands.mjs';
+
 const ERROR_MAX_CHARS = 300;
 const KILL_GRACE_MS = 5_000;
+const MCP_LIST_TIMEOUT_MS = 10_000;
+const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 
 // The distillation is one answer from the model, not an agent run: no hooks (they would start this plugin
 // again), no plugins, apps, shell or web search, a read-only sandbox in an empty directory, and nothing saved.
 const DISABLED_FEATURES = ['hooks', 'plugins', 'shell_tool', 'apps', 'multi_agent'];
+const DISABLED_FEATURE_FLAGS = DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]);
 
-export function codexExecArguments(model, workdir) {
+// `--disable plugins` drops the plugins' MCP servers but not those in the person's config.toml, which run
+// outside the read-only sandbox; each one still enabled is turned off by name. `--ignore-user-config` would
+// also drop the model provider the session ran on.
+export function codexExecArguments(model, workdir, { mcpServers = [] } = {}) {
   return [
     'exec', '--ephemeral', '--skip-git-repo-check', '--ignore-rules', '--json',
     '--sandbox', 'read-only',
-    ...DISABLED_FEATURES.flatMap((feature) => ['--disable', feature]),
+    ...DISABLED_FEATURE_FLAGS,
     '-c', 'web_search="disabled"',
+    ...mcpServers.flatMap((name) => ['-c', `mcp_servers.${name}.enabled=false`]),
     '-m', model,
     '-C', workdir,
     '-',
@@ -52,21 +61,73 @@ function failure(message, code) {
   return Object.assign(new Error(message), code ? { code } : {});
 }
 
+// An npm install of Codex on Windows is a `codex.cmd` shim, which only cmd.exe can start; its arguments are
+// escaped for cmd.exe and the shim, and stopping it ends cmd.exe's whole tree.
+export function spawnPlanOf(executable, args, platform = process.platform) {
+  const throughShell = platform === 'win32' && !/\.exe$/i.test(executable);
+  return { command: executable, args: throughShell ? args.map(cmdArgument) : args, shell: throughShell };
+}
+
+function startCodex(executable, args) {
+  const plan = spawnPlanOf(executable, args);
+  const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: plan.shell });
+  const stop = () => {
+    if (plan.shell) return endTree(child.pid);
+    child.kill('SIGTERM');
+    setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS).unref();
+  };
+  return { child, stop };
+}
+
+export function enabledMcpServersOf(listJson) {
+  try {
+    const servers = JSON.parse(listJson);
+    return Array.isArray(servers)
+      ? servers.filter((server) => server?.enabled === true && MCP_SERVER_NAME.test(String(server.name))).map((server) => server.name)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The MCP servers the distillation would start, as Codex lists them under the same flags; none when it cannot say. */
+function enabledMcpServers(executable) {
+  return new Promise((resolve) => {
+    const { child, stop } = startCodex(executable, [...DISABLED_FEATURE_FLAGS, 'mcp', 'list', '--json']);
+    let stdout = '';
+    const timer = setTimeout(stop, MCP_LIST_TIMEOUT_MS);
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stdin.on('error', () => {});
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve([]);
+    });
+    child.on('close', () => {
+      clearTimeout(timer);
+      resolve(enabledMcpServersOf(stdout));
+    });
+    child.stdin.end();
+  });
+}
+
 /**
  * Asks Codex itself, headless, for one answer on `model`: the prompt goes in on stdin and the answer is read
  * off `--json` events. Rejects with code ENOENT when there is no Codex executable to run.
  */
 export function codexModelRunner({ executable = 'codex' } = {}) {
-  return (model, prompt, signal) => new Promise((resolve, reject) => {
+  return async (model, prompt, signal) => {
+    const mcpServers = await enabledMcpServers(executable);
+    return answerOfExec(executable, { model, mcpServers }, prompt, signal);
+  };
+}
+
+function answerOfExec(executable, { model, mcpServers }, prompt, signal) {
+  return new Promise((resolve, reject) => {
     const workdir = mkdtempSync(path.join(os.tmpdir(), 'evolver-distill-'));
     const cleanUp = () => rmSync(workdir, { recursive: true, force: true });
-    const child = spawn(executable, codexExecArguments(model, workdir), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    const { child, stop } = startCodex(executable, codexExecArguments(model, workdir, { mcpServers }));
     let stdout = '';
     let stderr = '';
-    const stop = () => {
-      child.kill('SIGTERM');
-      setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS).unref();
-    };
     signal?.addEventListener('abort', stop, { once: true });
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });

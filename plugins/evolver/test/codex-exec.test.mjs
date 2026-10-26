@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-import { answerOfEvents, codexExecArguments, codexModelRunner } from '../lib/codex-exec.mjs';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+import { answerOfEvents, codexExecArguments, codexModelRunner, enabledMcpServersOf, spawnPlanOf } from '../lib/codex-exec.mjs';
 import { freshHome } from './helpers/sandbox.mjs';
 
 const FAKE_CODEX = fileURLToPath(new URL('./fixtures/fake-codex.mjs', import.meta.url));
@@ -38,4 +42,37 @@ test('the runner sends the prompt on stdin and reads the answer off the events',
 
 test('a missing codex executable rejects with ENOENT', async () => {
   await assert.rejects(codexModelRunner({ executable: '/nonexistent/codex' })('m', 'p', AbortSignal.timeout(5_000)), { code: 'ENOENT' });
+});
+
+test("the person's own MCP servers are turned off by name for the distillation", () => {
+  const args = codexExecArguments('gpt-test', '/tmp/x', { mcpServers: ['node_repl', 'docs'] });
+  assert.deepEqual(args.filter((arg, index) => args[index - 1] === '-c' && arg.startsWith('mcp_servers.')), [
+    'mcp_servers.node_repl.enabled=false', 'mcp_servers.docs.enabled=false',
+  ]);
+  assert.deepEqual(args.slice(-5), ['-m', 'gpt-test', '-C', '/tmp/x', '-']);
+});
+
+test('only enabled MCP servers with a plain name are taken from the listing; an unreadable one gives none', () => {
+  const listing = JSON.stringify([
+    { name: 'node_repl', enabled: true }, { name: 'codex_app', enabled: false }, { name: 'bad name"]', enabled: true },
+  ]);
+  assert.deepEqual(enabledMcpServersOf(listing), ['node_repl']);
+  assert.deepEqual(enabledMcpServersOf('Error: failed to load'), []);
+  assert.deepEqual(enabledMcpServersOf('{}'), []);
+});
+
+test('the runner turns off the MCP servers Codex lists under the same flags', async (t) => {
+  t.after(freshHome());
+  await codexModelRunner({ executable: FAKE_CODEX })('gpt-test', 'the prompt', AbortSignal.timeout(5_000));
+  const [call] = readFileSync(join(homedir(), 'fake-codex.log'), 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.ok(call.args.includes('mcp_servers.node_repl.enabled=false'));
+  assert.ok(!call.args.some((arg) => arg.startsWith('mcp_servers.codex_app')));
+});
+
+test('on Windows a codex.cmd shim starts through cmd.exe with escaped arguments; an .exe and other systems start directly', () => {
+  const shim = spawnPlanOf('codex', ['exec', '-m', 'a&b'], 'win32');
+  assert.equal(shim.shell, true);
+  assert.deepEqual(shim.args, ['^^^"exec^^^"', '^^^"-m^^^"', '^^^"a^^^&b^^^"']);
+  assert.deepEqual(spawnPlanOf('C:\\Codex\\codex.EXE', ['exec'], 'win32'), { command: 'C:\\Codex\\codex.EXE', args: ['exec'], shell: false });
+  assert.deepEqual(spawnPlanOf('codex', ['exec'], 'darwin'), { command: 'codex', args: ['exec'], shell: false });
 });

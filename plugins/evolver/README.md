@@ -100,6 +100,10 @@ the prompt on stdin — to write a Gene from a digest of that turn (task, comman
 answer — never the whole history), and sends it to the Proxy's `POST /conversation/distill` with
 `platform: 'codex'`, `trigger: 'session_end'`, `persist: true`, `publish: false` and its own token cost as
 `distill_usage`. Keys and tokens are stripped from the candidate first, paths and a manual focus included.
+The MCP servers of your own `config.toml`, which `--disable plugins` leaves on and which would run outside the
+read-only sandbox, are each turned off by name (`-c mcp_servers.<name>.enabled=false`, as `codex mcp list` names
+them under the same flags); the model provider settings stay in effect. On Windows an npm-installed `codex.cmd`
+is started through cmd.exe.
 
 A candidate stays on disk until it is distilled; three failed tries (no `codex` to run, not logged in, an
 unparsed answer, a Proxy error) give it up. One whose session is over — ended, or killed with its Codex process —
