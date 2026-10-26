@@ -22,16 +22,18 @@ function pruned(ledger, now) {
 const owned = (ledger, sessionId, pid) =>
   Object.fromEntries(Object.entries(ledger).map(([id, entry]) => [id, { ...entry, sessionId, pid }]));
 
-export function withInjected(ledger, assetId, { turn, strategyText, sessionId, pid }, now) {
+export function withInjected(ledger, assetId, { turn, title, sessionId, pid }, now) {
   const kept = owned(pruned(ledger, now), sessionId, pid);
   if (kept[assetId]) return kept;
-  return { ...kept, [assetId]: { turn, injectedAt: now, strategyText, sessionId, pid } };
+  return { ...kept, [assetId]: { turn, injectedAt: now, title, sessionId, pid } };
 }
+
+const injectionOf = (assetId, entry) => ({ assetId, title: entry.title || assetId, turn: entry.turn, sessionId: entry.sessionId });
 
 export function unreportedOf(ledger, turn) {
   return Object.entries(ledger ?? {})
     .filter(([, entry]) => !entry?.reportedAt && Number(entry?.turn) <= turn)
-    .map(([assetId, entry]) => ({ assetId, strategyText: entry.strategyText ?? '', turn: entry.turn, sessionId: entry.sessionId }));
+    .map(([assetId, entry]) => injectionOf(assetId, entry));
 }
 
 export function withReported(ledger, assetIds, now) {
@@ -80,7 +82,7 @@ export function queueOrphanedUnreported(queue, { isGone = ownerIsGone, now = Dat
     updateState(path.join(stateDir(), file), {}, (ledger) => {
       const due = Object.entries(ledger)
         .filter(([, entry]) => !entry?.reportedAt && entry?.sessionId && isGone(entry.pid))
-        .map(([assetId, entry]) => ({ assetId, strategyText: entry.strategyText ?? '', turn: entry.turn, sessionId: entry.sessionId }));
+        .map(([assetId, entry]) => injectionOf(assetId, entry));
       if (due.length === 0) return undefined;
       queue(due);
       return withReported(ledger, due.map((asset) => asset.assetId), now);

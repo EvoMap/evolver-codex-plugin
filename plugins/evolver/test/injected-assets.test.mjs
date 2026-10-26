@@ -21,7 +21,7 @@ function orphanedNow() {
 
 test('an orphaned injection whose queueing fails stays unreported for the next session start', () => {
   restoreHome = freshHome();
-  rememberInjected('s-killed', 'sha256:a', { pid: 1, turn: 2, strategyText: '1. a.' });
+  rememberInjected('s-killed', 'sha256:a', { pid: 1, turn: 2, title: 'a' });
 
   assert.throws(() => queueOrphanedUnreported(() => {
     throw new Error('disk full');
@@ -33,7 +33,7 @@ test('an orphaned injection whose queueing fails stays unreported for the next s
 
 test('an injection of a live session is not taken as orphaned', () => {
   restoreHome = freshHome();
-  rememberInjected('s-idle', 'sha256:b', { pid: process.pid, turn: 1, strategyText: '1. b.' });
+  rememberInjected('s-idle', 'sha256:b', { pid: process.pid, turn: 1, title: 'b' });
 
   const taken = [];
   queueOrphanedUnreported((due) => taken.push(...due), { isGone: () => false });

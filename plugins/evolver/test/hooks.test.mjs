@@ -66,7 +66,7 @@ function session(id) {
       writeFileSync(join(cwd, 'lru-cache.js'), 'export class LruCache {}\n');
       await runHook('post-tool-use', { ...tool('apply_patch', { command: patch }, response), hook_event_name: 'PostToolUse' }, sandbox.env);
     },
-    stop: (answer, { continuation = false } = {}) => runHook('stop', { ...base, hook_event_name: 'Stop', turn_id: turnId(), stop_hook_active: continuation, last_assistant_message: answer }, sandbox.env),
+    stop: (answer, { continuation = false, transcriptPath = null } = {}) => runHook('stop', { ...base, hook_event_name: 'Stop', turn_id: turnId(), transcript_path: transcriptPath, stop_hook_active: continuation, last_assistant_message: answer }, sandbox.env),
     interrupt: () => runHook('interrupt', { ...base, hook_event_name: 'Interrupt', turn_id: turnId() }, sandbox.env),
     end: () => runHook('session-end', { session_id: id, cwd, transcript_path: null, hook_event_name: 'SessionEnd', reason: 'other' }, sandbox.env),
   };
@@ -126,6 +126,31 @@ test('the turn end reports the strategy as used with the turn\'s own evidence, a
     evidence: { tier: 'L1', applied: 'used', check: { kind: 'test', passed: true, fail_then_pass: true }, aborted: false, stage: 'immediate' },
   });
   assert.equal(candidates()['s-lru']?.turn, 1);
+});
+
+test('a turn that reused a strategy ends with a one-line summary for the person, priced from its transcript', async () => {
+  await startSandbox();
+  const s = session('s-summary');
+  const transcriptPath = join(sandbox.home, 'rollout.jsonl');
+  writeFileSync(transcriptPath, [
+    { type: 'event_msg', payload: { type: 'task_started', turn_id: 's-summary-turn-1' } },
+    { type: 'event_msg', payload: { type: 'token_count', info: { last_token_usage: { input_tokens: 90_000, cached_input_tokens: 20_000, output_tokens: 5_000 } } } },
+  ].map((event) => JSON.stringify(event)).join('\n'));
+  await s.prompt('用 Node 写一个 LRU cache，带 get/set 和淘汰');
+  await s.patch(LRU_PATCH);
+  await s.shell('node --test', PASSED_RUN);
+
+  assert.deepEqual(await s.stop('LRU 缓存写好了，测试通过。', { transcriptPath }), {
+    systemMessage: '✓ Goal reached (last check passed: node --test) · reused EvoMap strategy "LRU cache in Node.js" · est. ~49k tokens saved (≈$0.44) · this turn used 75k fresh tokens',
+  });
+});
+
+test('a turn that reused nothing ends without a summary', async () => {
+  await startSandbox({ assets: [] });
+  const s = session('s-plain');
+  await s.prompt('add a retry to the uploader');
+  await s.shell('npm test', PASSED_RUN);
+  assert.deepEqual(await s.stop('Done.'), {});
 });
 
 test('a correction in the next prompt sends an L3 follow-up under :correction', async () => {
@@ -266,7 +291,7 @@ test("a killed session's open strategies are reported aborted at the next sessio
   await startSandbox();
   mkdirSync(statePath(''), { recursive: true });
   writeFileSync(statePath('codex-injected-0000000000000000.json'), JSON.stringify({
-    'sha256:orphan': { turn: 4, injectedAt: Date.now(), strategyText: '1. a.', sessionId: 's-killed', pid: deadPid() },
+    'sha256:orphan': { turn: 4, injectedAt: Date.now(), title: 'a', sessionId: 's-killed', pid: deadPid() },
   }));
   await session('s-next').start();
   const [report] = await waitFor(() => proxy.of('/asset/reuse-result'));

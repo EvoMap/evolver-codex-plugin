@@ -20,9 +20,9 @@ test('one strategy is injected, the best-scoring one with enough steps, ending w
 });
 
 test('a short prompt, an already injected asset or a Proxy error inject nothing', async () => {
-  assert.deepEqual(await hubGene(proxyWith([{ asset_id: 'a', strategy: steps(4) }]), 'fix it'), { ids: [], text: '' });
-  assert.deepEqual(await hubGene(proxyWith([{ asset_id: 'a', strategy: steps(4) }]), 'add a retry to the uploader', { listedIds: new Set(['a']) }), { ids: [], text: '' });
-  assert.deepEqual(await hubGene(async () => ({ ok: false, error: 'down' }), 'add a retry to the uploader'), { ids: [], text: '' });
+  assert.deepEqual(await hubGene(proxyWith([{ asset_id: 'a', strategy: steps(4) }]), 'fix it'), { ids: [], text: '', title: '' });
+  assert.deepEqual(await hubGene(proxyWith([{ asset_id: 'a', strategy: steps(4) }]), 'add a retry to the uploader', { listedIds: new Set(['a']) }), { ids: [], text: '', title: '' });
+  assert.deepEqual(await hubGene(async () => ({ ok: false, error: 'down' }), 'add a retry to the uploader'), { ids: [], text: '', title: '' });
 });
 
 test('the prompt loses keys and tokens before recall sends it', () => {

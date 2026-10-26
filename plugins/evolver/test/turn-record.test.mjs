@@ -36,6 +36,7 @@ test('a turn record keeps commands, checks with their verdict, touched paths and
   assert.deepEqual(record.commands, ['ls src', 'npm test', 'npm test']);
   assert.deepEqual(record.checks, [{ command: 'npm test', failed: true }, { command: 'npm test', failed: false }]);
   assert.deepEqual(record.edits, ['src/lru.js', 'src/old.js', 'src/new.js', 'src/gone.js']);
+  assert.equal(record.changedLines, 3, 'only the applied patch counts its added and removed lines');
   assert.equal(record.paths.filter((file) => file === 'src/lru.js').length, 2);
   assert.deepEqual([...record.editedBefore], [['/p/src/lru.js', 'absent']]);
   assert.equal(record.answer, '');

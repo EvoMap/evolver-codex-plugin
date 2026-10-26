@@ -51,7 +51,7 @@ async function recalledStrategy(sessionId, turn, prompt) {
   });
   const [assetId] = match.ids;
   if (!assetId) return '';
-  rememberInjected(sessionId, assetId, { turn, strategyText: match.text, pid: hostProcess()?.pid ?? null });
+  rememberInjected(sessionId, assetId, { turn, title: match.title, pid: hostProcess()?.pid ?? null });
   return match.text;
 }
 

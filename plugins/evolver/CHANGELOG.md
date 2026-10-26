@@ -5,6 +5,11 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- A one-line turn summary for a turn that reused a strategy, as the `Stop` hook's `systemMessage`: whether the
+  goal was reached by the last check, the reused strategy, and the estimated tokens saved (the Claude Code
+  plugin's reference-reuse estimate, capped at the turn's own fresh tokens from the Codex transcript).
+
 ## [0.3.0] - 2026-10-26
 
 Aligned with the DeepSeek Harness plugin (dsh-evolver 0.3.0): Evolver stays out of the model context.

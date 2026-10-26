@@ -23,11 +23,6 @@ export function abortedReports(assets) {
   }));
 }
 
-/**
- * Every injected strategy is reported when its turn ends, with the turn's own evidence; the turn itself becomes
- * the session's distillation candidate when it finished verified. Returns the reuses the
- * next prompt may label, and whether anything was queued. `ownerPid` is only asked when a candidate is written.
- */
 function answerOf(answer) {
   return typeof answer === 'string' ? answer.trim() : '';
 }
@@ -42,15 +37,28 @@ function rememberTurnCandidate({ sessionId, session, reasonKind, record, model, 
   return true;
 }
 
+/**
+ * Every injected strategy is reported when its turn ends, with the turn's own evidence; the turn itself becomes
+ * the session's distillation candidate when it finished verified. Returns the reuses the next prompt may label,
+ * the names of the strategies the turn reused, whether anything was queued, and the turn's record and changed
+ * lines. `ownerPid` is only asked when a candidate is written.
+ */
 export function closeTurn({ sessionId, session, reasonKind, answer, model, projectDir, ownerPid = () => null }) {
   const record = { ...takeTurnRecord(sessionId), answer: answerOf(answer) };
-  if (!outcomeOfReason(reasonKind)) return { reuses: [], queued: false, record: storedRecordOf(record) };
-  const reports = reportsOf(takeUnreported(sessionId, session.turn), { sessionId, turn: session.turn, reasonKind, record });
+  if (!outcomeOfReason(reasonKind)) return { reuses: [], reusedNames: [], queued: false, record: storedRecordOf(record), changedLines: record.changedLines };
+  const taken = takeUnreported(sessionId, session.turn);
+  const reports = reportsOf(taken, { sessionId, turn: session.turn, reasonKind, record });
   const reuses = reports.map(reportedReuseOf);
   queueReports(reports.map((report) => ({ report, sessionId })));
   rememberForRetention({ sessionId, projectDir, reuses, editedBefore: record.editedBefore });
   rememberTurnCandidate({ sessionId, session, reasonKind, record, model, ownerPid });
-  return { reuses, queued: reports.length > 0, record: storedRecordOf(record) };
+  return {
+    reuses,
+    reusedNames: taken.map((asset) => asset.title),
+    queued: reports.length > 0,
+    record: storedRecordOf(record),
+    changedLines: record.changedLines,
+  };
 }
 
 /**

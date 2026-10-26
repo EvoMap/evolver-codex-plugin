@@ -7,9 +7,13 @@ function parsedInput(raw) {
   }
 }
 
-// Stop accepts only JSON on stdout, so a hook with nothing to add says `{}` on every event.
-export function hookOutputOf(eventName, context) {
-  return JSON.stringify(context ? { hookSpecificOutput: { hookEventName: eventName, additionalContext: context } } : {});
+/**
+ * A handler answers with model context (a string, possibly empty) or `{ systemMessage }`, a line Codex shows the
+ * person and never the model. Stop accepts only JSON on stdout, so a hook with nothing to add says `{}`.
+ */
+export function hookOutputOf(eventName, answer) {
+  if (answer?.systemMessage) return JSON.stringify({ systemMessage: answer.systemMessage });
+  return JSON.stringify(typeof answer === 'string' && answer ? { hookSpecificOutput: { hookEventName: eventName, additionalContext: answer } } : {});
 }
 
 export function sessionIdOf(input) {

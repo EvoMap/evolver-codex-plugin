@@ -1,4 +1,5 @@
 const FILE_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/;
+const CHANGED_LINE = /^[+-](?![+-]{2} )/;
 const APPLIED = /^Exit code: 0\b|^Success\./m;
 const EMBEDDED_PATCH = /^\*\*\* Begin Patch$[\s\S]*?^\*\*\* End Patch$/m;
 
@@ -18,6 +19,10 @@ export function patchedPaths(patch) {
     if (file && !paths.includes(file.trim())) paths.push(file.trim());
   }
   return paths;
+}
+
+export function changedLineCount(patch) {
+  return String(patch ?? '').split('\n').filter((line) => CHANGED_LINE.test(line)).length;
 }
 
 export function patchApplied(response) {

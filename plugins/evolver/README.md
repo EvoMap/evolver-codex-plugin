@@ -18,7 +18,7 @@ plugin's `scripts/evolver.mjs`.
 | `UserPromptSubmit` | Recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
 | `PreToolUse` (`Bash`, `apply_patch`) | Hashes the files a patch is about to touch, for the retention report. |
 | `PostToolUse` (`Bash`, `apply_patch`) | Notes the turn's commands, checks (test, build, lint, type check) with pass or fail, touched paths and the files its patches edited. |
-| `Stop` | Reports every strategy injected into the turn; makes the turn the session's distillation candidate when it ended verified. A continuation another Stop hook starts joins the turn: its work re-judges the candidate (the reports have already gone out). |
+| `Stop` | Reports every strategy injected into the turn; shows you a one-line turn summary when the turn reused one; makes the turn the session's distillation candidate when it ended verified. A continuation another Stop hook starts joins the turn: its work re-judges the candidate (the reports have already gone out). |
 | `Interrupt` (Codex 0.150+) | Reports the turn's strategies as aborted. |
 | `SessionEnd` (Codex 0.145+) | Closes a turn still open as one that ended on an error (Codex interrupts a running turn before it), reports what is left as aborted, closes the candidate and starts its distillation in the background. Keeps the session's turn counter, so a resumed thread never repeats a task id. |
 
@@ -92,6 +92,25 @@ is claimed by the next session start, one process at a time, while an idle sessi
 nothing. The owner recorded with a candidate or an injection is the nearest ancestor process whose executable is
 named `codex*` (the CLI, or the Desktop app's app-server). Where no process table can be read (Windows) no owner is
 recorded, and such entries are only reported or distilled once their session ends.
+
+## Turn summary
+
+A turn that reused a strategy ends with one line for you, never for the model, sent as the `Stop` hook's
+`systemMessage`:
+
+```
+✓ Goal reached (last check passed: npm test) · reused EvoMap strategy "Retry flaky uploads" · est. ~49k tokens saved (≈$0.44) · this turn used 75k fresh tokens
+```
+
+- The goal is judged by the turn's last check, as the reuse report is (`✗ Goal not reached`, or `○ Unverified`
+  when no check ran).
+- The saving is the reference-reuse estimate the Claude Code plugin and the EvoMap ledger use: 40% of deriving
+  the approach from scratch (120k tokens plus 800 per changed line, at most 600k), priced at $9 per million
+  tokens. It is claimed only when the last check passed, and never above the turn's own fresh tokens.
+- Fresh tokens are the turn's input minus cached input, plus output, summed over the model calls Codex logged
+  for the turn in its transcript.
+- Codex hands the line to its clients through the app-server protocol (`hook/completed`, an entry of kind
+  `warning`), never to the model. Plain `codex exec` prints only `hook: Stop Completed`.
 
 ## Reuse reports
 

@@ -22,7 +22,7 @@ const DEFAULT_MIN_SIMILARITY = 0.3;
 const MIN_STRATEGY_STEPS = 4;
 export const STRATEGY_MAX_CHARS = 4000;
 const UNSCORED = -1;
-const EMPTY_MATCH = { ids: [], text: '' };
+const EMPTY_MATCH = { ids: [], text: '', title: '' };
 
 function strategySteps(asset) {
   const steps = asset?.strategy ?? asset?.payload?.strategy ?? asset?.gene?.strategy;
@@ -162,6 +162,7 @@ export async function hubGene(proxyFetch, text, {
     });
     return {
       ids: [candidate.asset_id],
+      title: readableNameOf(candidate),
       text: [
         `[Evolution Memory] ${readableNameOf(candidate)} (EvoMap network):`,
         ...steps.map((step, index) => `${index + 1}. ${step}`),

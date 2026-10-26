@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { patchApplied, patchedPaths, patchOf } from './apply-patch.mjs';
+import { changedLineCount, patchApplied, patchedPaths, patchOf } from './apply-patch.mjs';
 import { contentHashOf } from './retention-pending.mjs';
 import { appendStateLine, hashedName, removeState, statePath, takeStateLines } from './state-file.mjs';
 import { isVerificationCommand, runningSessionOf, shellCheckFailed } from './verification.mjs';
@@ -14,7 +14,7 @@ const PATH_KEYS = ['path', 'file_path'];
 const recordPath = (sessionId) => statePath(hashedName('codex-turn', sessionId, 'jsonl'));
 
 function freshTurnRecord() {
-  return { checks: [], commands: [], paths: [], edits: [], editedBefore: new Map(), answer: '' };
+  return { checks: [], commands: [], paths: [], edits: [], changedLines: 0, editedBefore: new Map(), answer: '' };
 }
 
 export function noteFilesBeforePatch(sessionId, cwd, { tool_name: name, tool_input: input }) {
@@ -27,7 +27,8 @@ export function noteFilesBeforePatch(sessionId, cwd, { tool_name: name, tool_inp
 function patchFields(patch, response) {
   if (!patch) return {};
   const paths = patchedPaths(patch);
-  return { paths, edited: patchApplied(response) ? paths : [] };
+  if (!patchApplied(response)) return { paths, edited: [] };
+  return { paths, edited: paths, changedLines: changedLineCount(patch) };
 }
 
 // A command still running at its wait limit has no verdict yet. Codex reports its completion later as another
@@ -79,6 +80,7 @@ function addNote(record, note, pending) {
   if (note.check) record.checks.push(note.check);
   record.paths.push(...(note.paths ?? []));
   record.edits.push(...(note.edited ?? []));
+  record.changedLines += note.changedLines ?? 0;
 }
 
 export function turnRecordOf(notes) {
