@@ -38,7 +38,9 @@ back as follows:
 ## Prerequisites
 
 - Codex with hooks enabled (`[features] hooks`, on by default). Plugin hooks run only once you trust them: open
-  `/hooks` in Codex after installing or updating the plugin and approve the Evolver hooks.
+  `/hooks` in Codex after installing or updating the plugin and approve the Evolver hooks. Approve them in the Codex you run the
+  plugin with, or one as new: an older Codex lists only the events it knows (0.144 shows five of the seven), so
+  `Interrupt` and `SessionEnd` stay untrusted for a newer app.
 - Node.js 20 or newer on the `PATH` Codex hooks see (hooks run through your login shell).
 - Evolver 2.0.44 or newer. The plugin installs it under `~/.evolver/state/codex-engine` and starts its Proxy in the
   background when it is missing; `npm install -g @evomap/evolver@latest` works too.

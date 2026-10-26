@@ -23,6 +23,7 @@ codex plugin add evolver@evomap
 ```
 
 Then open `/hooks` in Codex and trust the Evolver hooks: Codex skips plugin hooks until they are reviewed.
+Approve them in the Codex you use (for the app, the app itself): an older CLI lists only the hooks it knows.
 Start a new Codex thread afterwards.
 
 **Local memory works with zero config** — no account, no key, nothing to fill
