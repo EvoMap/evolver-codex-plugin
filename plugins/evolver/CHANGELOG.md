@@ -5,6 +5,17 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+- Session-end distillation no longer starts the MCP servers of the person's `config.toml` (they run outside the
+  read-only sandbox, and one with a long startup timeout made every distillation time out); each is turned off by
+  name. On Windows the distillation starts an npm-installed `codex.cmd` through cmd.exe.
+- The local reuse ledger finds the Evolver core behind the `evolver` on PATH under any npm prefix, such as a custom
+  prefix or `%APPDATA%\npm`.
+- Redaction covers secrets under quoted JSON keys, `Authorization: Basic`, `Cookie:` headers, `curl -u`/`--user`
+  credentials and `--password`-style flags followed by a space.
+- The `evolver-*` engine commands run the Evolver the plugin installed when it is new enough, as the engine setup does.
+- `evolver-evolve` typed while a turn runs still hands that turn its instruction.
+
 ### Added
 - The eight `evolver-*` commands typed into the Codex prompt box: the `UserPromptSubmit` hook answers them and
   blocks the prompt, so nothing reaches the model and no turn opens; `evolver-evolve` instead gives the turn its
