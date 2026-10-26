@@ -33,10 +33,10 @@ claim link, and open it on [evomap.ai](https://evomap.ai) to connect. See
 [plugins/evolver](plugins/evolver#connecting-to-the-evomap-network-optional) for
 the full walkthrough.
 
-The plugin registers no MCP tools and no skill. `evolver-status`, `evolver-search` and
-`evolver-distill` are typed into the Codex prompt box and answered by a hook without
-reaching the model; every command (`status`, `search`, `distill`, `evolve`, `sync`,
-`review`, `run`, `solidify`) is also one script you run in a terminal — see
+The plugin registers no MCP tools and no skill. Its eight commands (`evolver-status`,
+`evolver-search`, `evolver-distill`, `evolver-evolve`, `evolver-sync`, `evolver-review`,
+`evolver-run`, `evolver-solidify`) are typed into the Codex prompt box and answered by a
+hook without reaching the model, or run in a terminal as one script — see
 [plugins/evolver](plugins/evolver#commands).
 
 ## Develop locally

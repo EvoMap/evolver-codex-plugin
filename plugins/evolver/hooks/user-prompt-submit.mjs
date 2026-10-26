@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { DISTILL_SESSION_TASK, DRAIN_TASK, startInBackground } from '../lib/background.mjs';
+import { cliJobResult, startCliJob } from '../lib/cli-job.mjs';
 import { feedbackLabelOf } from '../lib/feedback-label.mjs';
 import { runHook, sessionIdOf } from '../lib/hook-io.mjs';
 import { injectedIds, rememberInjected } from '../lib/injected-assets.mjs';
@@ -19,6 +20,7 @@ import { forgetTurnRecord } from '../lib/turn-record.mjs';
 
 const RECALL_TIMEOUT_MS = 6_000;
 const COMMAND_PROXY_TIMEOUT_MS = 6_000;
+const CLI_WAIT_MS = 6_000;
 
 // Codex runs no Stop or Interrupt hook for a turn that ended on an error, so a turn still open when the next
 // prompt arrives is closed here as one.
@@ -58,11 +60,18 @@ async function recalledStrategy(sessionId, turn, prompt) {
   return match.text;
 }
 
-// A command is not a turn: it opens none, labels nothing and recalls nothing.
-function answerCommand(command, sessionId) {
+// An engine command that outlasts the wait keeps running in its own process; its result lands in the log.
+async function runCliJob(args, cwd) {
+  const job = await cliJobResult(startCliJob(args, cwd), { waitMs: CLI_WAIT_MS });
+  if (job) return { kind: job.kind, text: job.text };
+  return { kind: 'success', text: `evolver ${args[0]} is still running in the background (ten minutes at most); evolver-status shows how it ended.` };
+}
+
+function answerCommand(command, sessionId, input) {
   const proxyFetch = createProxyClient({ timeoutMs: COMMAND_PROXY_TIMEOUT_MS });
   return answerPromptCommand(command, {
     sessionId,
+    runCli: (args) => runCliJob(args, projectDirOf(input)),
     status: () => statusReport(proxyFetch),
     search: (text) => proxyFetch('POST', '/asset/search', { text, limit: 5 }),
     startDistill: (id, focus) => startInBackground([DISTILL_SESSION_TASK], {
@@ -77,13 +86,15 @@ async function promptContext(input) {
   if (!sessionId) return '';
   const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : '';
   const command = promptCommandOf(prompt);
-  if (command) return { blockReason: await answerCommand(command, sessionId) };
+  const answer = command ? await answerCommand(command, sessionId, input) : null;
+  // A command answered here is no turn: it opens none, labels nothing and recalls nothing.
+  if (answer?.blockReason) return answer;
   if (input.turn_id && input.turn_id === readSession(sessionId).turnId) return '';
   const closed = closeFailedTurn(sessionId, input);
   const followedUp = reportFollowUp(sessionId, closed.labelable, prompt);
   if (closed.queued || followedUp) startInBackground([DRAIN_TASK]);
   const { turn } = openTurn(sessionId, input, prompt);
-  return recalledStrategy(sessionId, turn, prompt);
+  return answer ? answer.context : recalledStrategy(sessionId, turn, prompt);
 }
 
 runHook('UserPromptSubmit', promptContext);

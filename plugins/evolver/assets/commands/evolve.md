@@ -13,5 +13,5 @@ Take a deliberate evolution step for the current task.
    worked, what didn't, and what the durable lesson is.
 
 Reuse of an injected strategy is reported at every turn end, and the session's verified work is
-distilled when the session ends; the plugin's `evolver.mjs distill` distills it now. Keep this lightweight — it is an
+distilled when the session ends; `evolver-distill` distills it now. Keep this lightweight — it is an
 explicit checkpoint, not a ceremony on every turn.

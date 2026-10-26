@@ -57,10 +57,10 @@ export function cmdArgument(arg) {
   return quoted.replace(CMD_METACHARACTERS, '^$1').replace(CMD_METACHARACTERS, '^$1');
 }
 
-function execute(file, args) {
+function execute(file, args, { cwd } = {}) {
   return new Promise((resolve) => {
     let timer = null;
-    const options = { maxBuffer: 16 * 1024 * 1024, detached: !IS_WINDOWS, shell: IS_WINDOWS, windowsHide: true };
+    const options = { maxBuffer: 16 * 1024 * 1024, detached: !IS_WINDOWS, shell: IS_WINDOWS, windowsHide: true, cwd };
     const child = execFile(file, IS_WINDOWS ? args.map(cmdArgument) : args, options, (error, stdout, stderr) => {
       clearTimeout(timer);
       resolve({ error, output: `${stdout ?? ''}${stderr ? `\n${stderr}` : ''}`.trim() });
@@ -83,10 +83,11 @@ export async function isMissingExecutable(error, name, { platform = process.plat
   return platform === 'win32' && !(await isOnPath(name));
 }
 
-// The installed `evolver` when there is one, else the published package through npx.
-export async function runEvolverCli(args, { run = execute, isMissing = isMissingExecutable } = {}) {
-  let { error, output } = await run('evolver', args);
-  if (await isMissing(error, 'evolver')) ({ error, output } = await run('npx', ['-y', CLI_PACKAGE, ...args]));
+// The installed `evolver` when there is one, else the published package through npx, in `cwd` (the project
+// `evolver run` and `solidify` work on; this process's own directory when none is given).
+export async function runEvolverCli(args, { run = execute, isMissing = isMissingExecutable, cwd } = {}) {
+  let { error, output } = await run('evolver', args, { cwd });
+  if (await isMissing(error, 'evolver')) ({ error, output } = await run('npx', ['-y', CLI_PACKAGE, ...args], { cwd }));
   return error ? failure(shown(output || String(error.message))) : success(shown(output || 'done'));
 }
 

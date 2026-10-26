@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 
@@ -179,6 +179,31 @@ test("evolver-distill distills this session's verified turn in the background, a
   await waitFor(() => Object.keys(candidates()).length === 0);
   await waitFor(async () => /last distillation sent for s-distill-now/.test((await s.prompt('evolver-status')).reason));
   assert.match((await s.prompt('evolver-distill')).reason, /Nothing to distill yet/);
+});
+
+test('an engine command typed in Codex runs the evolver CLI in the project and answers with its output', async () => {
+  await startSandbox();
+  const s = session('s-cli');
+  const answer = await s.prompt('evolver-sync --dry-run');
+  assert.equal(answer.decision, 'block');
+  assert.equal(answer.reason, `fake evolver sync --dry-run in ${realpathSync(s.cwd)}`);
+  assert.match((await s.prompt('evolver-status')).reason, /OK Last engine command: evolver sync --dry-run at /);
+});
+
+test('an engine command that outlasts the hook keeps running, and evolver-status shows how it ended', async () => {
+  await startSandbox();
+  const s = session('s-slow');
+  assert.match((await s.prompt('evolver-run --slow --fail')).reason, /^evolver run is still running in the background/);
+  await waitFor(async () => /FAIL Last engine command: evolver run --slow --fail/.test((await s.prompt('evolver-status')).reason), 15_000);
+});
+
+test('evolver-evolve hands the model its instruction as the turn context, without a recall', async () => {
+  await startSandbox();
+  const s = session('s-evolve');
+  const answer = await s.prompt('evolver-evolve the retry');
+  assert.equal(answer.decision, undefined);
+  assert.match(answer.hookSpecificOutput.additionalContext, /^Take a deliberate evolution step for the current task\.[\s\S]*Focus: the retry$/);
+  assert.deepEqual(proxy.of('/asset/fetch'), []);
 });
 
 test('a correction in the next prompt sends an L3 follow-up under :correction', async () => {

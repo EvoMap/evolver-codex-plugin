@@ -7,16 +7,19 @@ import { fileURLToPath } from 'node:url';
 
 export const pluginRoot = fileURLToPath(new URL('../../', import.meta.url));
 const FAKE_CODEX = fileURLToPath(new URL('../fixtures/fake-codex.mjs', import.meta.url));
+const FAKE_EVOLVER = fileURLToPath(new URL('../fixtures/fake-evolver.mjs', import.meta.url));
 const TOKEN = 'test-proxy-token';
 const SYSTEM_PATH = process.platform === 'win32' ? process.env.PATH : '/usr/bin:/bin';
 
-/** A HOME of its own for hook processes, with a `codex` on PATH that answers like `codex exec --json`. */
+/** A HOME of its own for hook processes, with a `codex` on PATH that answers like `codex exec --json` and an `evolver` that echoes its call. */
 export function sandboxHome() {
   const home = mkdtempSync(join(tmpdir(), 'evolver-codex-home-'));
   const bin = join(home, 'bin');
   mkdirSync(bin, { recursive: true });
   copyFileSync(FAKE_CODEX, join(bin, 'codex'));
   chmodSync(join(bin, 'codex'), 0o755);
+  copyFileSync(FAKE_EVOLVER, join(bin, 'evolver'));
+  chmodSync(join(bin, 'evolver'), 0o755);
   return {
     home,
     env: { ...process.env, HOME: home, USERPROFILE: home, PLUGIN_ROOT: pluginRoot, EVOMAP_PROXY_PORT: '1', PATH: [bin, dirname(process.execPath), SYSTEM_PATH].join(delimiter) },

@@ -6,9 +6,11 @@ This project follows Semantic Versioning.
 ## [Unreleased]
 
 ### Added
-- `evolver-status`, `evolver-search <text>` and `evolver-distill [focus]` typed into the Codex prompt box: the
-  `UserPromptSubmit` hook answers them and blocks the prompt, so nothing reaches the model and no turn opens.
-  `evolver-distill` runs in a background process; the status report now shows how the last distillation ended.
+- The eight `evolver-*` commands typed into the Codex prompt box: the `UserPromptSubmit` hook answers them and
+  blocks the prompt, so nothing reaches the model and no turn opens; `evolver-evolve` instead gives the turn its
+  checkpoint instruction. `evolver-distill` and the engine commands (`sync`, `review`, `run`, `solidify`, run in
+  the project) go on in background processes; the status report shows how the last distillation and the last
+  engine command ended.
 - A one-line turn summary for a turn that reused a strategy, as the `Stop` hook's `systemMessage`: whether the
   goal was reached by the last check, the reused strategy, and the estimated tokens saved (the Claude Code
   plugin's reference-reuse estimate, capped at the turn's own fresh tokens from the Codex transcript).

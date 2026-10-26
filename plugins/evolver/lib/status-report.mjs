@@ -6,6 +6,7 @@ import { engineNoticeOf } from './engine-notice.mjs';
 import { engineDir } from './engine-runtime.mjs';
 import { readEngineState } from './engine-state.mjs';
 import { MIN_EVOLVER_VERSION } from './engine-version.mjs';
+import { readCliLog } from './cli-job.mjs';
 import { readDistillLog } from './distill-log.mjs';
 import { describeProxyEndpoint } from './proxy.mjs';
 import { readRecallLog } from './recall-log.mjs';
@@ -14,6 +15,7 @@ import { pendingPath } from './session-distill.mjs';
 import { readState } from './state-file.mjs';
 
 const RECENT_REPORTS = 5;
+const CLI_OUTPUT_MAX_CHARS = 1_500;
 
 const line = (mark, label, value) => `${mark} ${label}: ${value}`;
 const at = (ms) => (ms ? new Date(ms).toISOString() : '(never)');
@@ -77,6 +79,13 @@ function candidateLines(pending, distillLog) {
   ];
 }
 
+function cliLines({ last }) {
+  if (!last) return [];
+  const output = last.text.length > CLI_OUTPUT_MAX_CHARS ? `${last.text.slice(0, CLI_OUTPUT_MAX_CHARS)}\n…` : last.text;
+  const mark = last.kind === 'success' ? 'OK' : 'FAIL';
+  return [line(mark, 'Last engine command', `${last.command} at ${last.at}`), ...output.split('\n').map((text) => `     ${text}`)];
+}
+
 function claimLines() {
   const claimUrlPath = path.join(os.homedir(), '.evomap', 'claim_url');
   try {
@@ -101,6 +110,7 @@ export async function statusReport(proxyFetch) {
     ...recallLines(readRecallLog()),
     ...reportLines(readState(outboxPath(), {})),
     ...candidateLines(readState(pendingPath(), {}), readDistillLog()),
+    ...cliLines(readCliLog()),
     ...claimLines(),
   ].join('\n');
 }

@@ -15,7 +15,7 @@ plugin's `scripts/evolver.mjs`.
 | Codex hook | What the plugin does |
 | --- | --- |
 | `SessionStart` | Reports the previous session's kept or reverted edits (retention) and the open strategies of a killed session (aborted), starts Evolver if it is missing or too old, and distills leftover candidates — all in a detached background worker. Adds no context, except a one-off notice when it installed, upgraded or could not start Evolver. |
-| `UserPromptSubmit` | Answers `evolver-status`, `evolver-search` and `evolver-distill` itself and blocks them from the model. Otherwise recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
+| `UserPromptSubmit` | Answers the `evolver-*` commands itself and blocks them from the model (`evolver-evolve` goes on with its instruction as context). Otherwise recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
 | `PreToolUse` (`Bash`, `apply_patch`) | Hashes the files a patch is about to touch, for the retention report. |
 | `PostToolUse` (`Bash`, `apply_patch`) | Notes the turn's commands, checks (test, build, lint, type check) with pass or fail, touched paths and the files its patches edited. |
 | `Stop` | Reports every strategy injected into the turn; shows you a one-line turn summary when the turn reused one; makes the turn the session's distillation candidate when it ended verified. A continuation another Stop hook starts joins the turn: its work re-judges the candidate (the reports have already gone out). |
@@ -56,20 +56,23 @@ and token from `~/.evolver/settings.json` (written by the Proxy), else `http://1
 
 ## Commands
 
-Codex plugins cannot add slash commands. Three of the commands dsh and Claude Code offer as `/evolver-*` are
-typed into the Codex prompt box as they are; the `UserPromptSubmit` hook answers them itself and blocks the
-prompt, so Codex sends it to no model, opens no turn and keeps nothing of it in the context. The answer is the
-hook's block reason, which Codex shows its client as a `feedback` entry.
+Codex plugins cannot add slash commands, so the eight commands dsh and Claude Code offer as `/evolver-*` are typed
+into the Codex prompt box as they are. The `UserPromptSubmit` hook answers each itself and blocks the prompt, so
+Codex sends it to no model, opens no turn and keeps nothing of it in the context; the answer is the hook's block
+reason, which Codex shows its client as a `feedback` entry. `evolver-evolve` is the exception: it is meant for the
+agent, so its prompt goes on to the model with the checkpoint instruction as the turn's context, instead of a recall.
 
 | Typed in Codex | What it does |
 | --- | --- |
-| `evolver-status` | The same report as the script's `status`, including how the last distillation ended. |
+| `evolver-status` | The Proxy, engine setup, the latest recall, recent reuse reports with the Hub's verdict, waiting candidates and how the last distillation ended, the last engine command's output, claim link. |
 | `evolver-search <text>` | Searches the EvoMap network (`POST /asset/search`). |
 | `evolver-distill [focus]` | Distills this session's latest verified turn in a background process (a distillation outlasts the hook's time); `evolver-status` shows how it ended. |
+| `evolver-evolve [focus]` | Gives the agent the evolution-checkpoint instruction for this turn. |
+| `evolver-sync`, `evolver-review`, `evolver-run`, `evolver-solidify` | Run the `evolver` CLI in the project (`npx -y @evomap/evolver@^2.0.44` when it is not installed), ten minutes at most, in a process of their own. An answer within six seconds is shown; a longer run keeps going and `evolver-status` shows its output once it ends. |
 
 Only a prompt that is exactly one of these counts (a leading `/` is accepted, though a client may keep slash
-input for its own commands); `evolver-status` followed by more text is an ordinary prompt. Every command, the
-long-running ones included, is also one script the person runs in a terminal:
+input for its own commands); `evolver-status` followed by more text is an ordinary prompt. The same commands are
+also one script the person runs in a terminal:
 
 ```bash
 node ~/.codex/plugins/cache/evomap/evolver/<version>/scripts/evolver.mjs <command> [arguments]
