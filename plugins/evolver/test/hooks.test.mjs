@@ -153,6 +153,34 @@ test('a turn that reused nothing ends without a summary', async () => {
   assert.deepEqual(await s.stop('Done.'), {});
 });
 
+test('evolver-status in the prompt box is answered by the hook, kept from the model, and opens no turn', async () => {
+  await startSandbox();
+  const s = session('s-command');
+  const answer = await s.prompt('evolver-status');
+  assert.equal(answer.decision, 'block');
+  assert.match(answer.reason, /^Evolver Codex plugin status\n/);
+  assert.match(answer.reason, /OK Proxy: running/);
+  assert.equal(answer.hookSpecificOutput, undefined, 'nothing reaches the model');
+  assert.deepEqual(proxy.of('/asset/fetch'), [], 'a command recalls nothing');
+
+  await lruTurn(s);
+  const [report] = await waitFor(() => proxy.of('/asset/reuse-result'));
+  assert.equal(report.task_id, 'codex:s-command:1', 'the command was not counted as a turn');
+});
+
+test("evolver-distill distills this session's verified turn in the background, and evolver-status shows how it ended", async () => {
+  await startSandbox({ assets: [] });
+  const s = session('s-distill-now');
+  await verifiedTurn(s);
+  assert.match((await s.prompt('evolver-distill the backoff')).reason, /in the background/);
+
+  const [body] = await waitFor(() => proxy.of('/conversation/distill'));
+  assert.equal(body.trigger, 'session_end');
+  await waitFor(() => Object.keys(candidates()).length === 0);
+  await waitFor(async () => /last distillation sent for s-distill-now/.test((await s.prompt('evolver-status')).reason));
+  assert.match((await s.prompt('evolver-distill')).reason, /Nothing to distill yet/);
+});
+
 test('a correction in the next prompt sends an L3 follow-up under :correction', async () => {
   await startSandbox();
   const s = session('s-fix');

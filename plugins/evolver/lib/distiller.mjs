@@ -1,3 +1,4 @@
+import { recordDistill } from './distill-log.mjs';
 import {
   claimLeftoverCandidates, claimSessionCandidate, distillCandidate, dueCandidates, isCurrentCandidate, settleCandidate,
 } from './session-distill.mjs';
@@ -22,6 +23,7 @@ export async function distillDue({ sessionId, candidate }, { proxyFetch, runMode
     const isCurrent = () => isCurrentCandidate(sessionId, candidate);
     const outcome = await distillCandidate({ proxyFetch, runModel, candidate, focus, timeoutMs, cancel: cancel.signal, isCurrent });
     settleCandidate(sessionId, candidate, { sent: outcome.status === 'sent' });
+    recordDistill(sessionId, outcome);
     return outcome;
   } finally {
     cancel.stop();

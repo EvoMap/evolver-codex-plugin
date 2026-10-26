@@ -115,6 +115,7 @@ function evolveCommand() {
 function distillMessage(outcome) {
   if (outcome.status === 'nothing') return failure('Nothing to distill yet: no turn of this session finished verified.');
   if (outcome.status === 'running') return failure('A distillation of this session is already running.');
+  if (outcome.status === 'started') return success("Distilling this session's latest verified turn in the background; evolver-status shows how it ended.");
   return outcome.status === 'sent' ? success(shown(outcome.data ?? 'distilled')) : failure(`Distillation ${outcome.status}: ${outcome.error ?? ''}`.trim());
 }
 

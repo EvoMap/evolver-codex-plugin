@@ -1,21 +1,24 @@
 #!/usr/bin/env node
-import { DRAIN_TASK, startInBackground } from '../lib/background.mjs';
+import { DISTILL_SESSION_TASK, DRAIN_TASK, startInBackground } from '../lib/background.mjs';
 import { feedbackLabelOf } from '../lib/feedback-label.mjs';
 import { runHook, sessionIdOf } from '../lib/hook-io.mjs';
 import { injectedIds, rememberInjected } from '../lib/injected-assets.mjs';
 import { hubGene, promptTextOf } from '../lib/prime.mjs';
 import { hostProcess } from '../lib/process-owner.mjs';
 import { projectDirOf } from '../lib/project-dir.mjs';
+import { answerPromptCommand, promptCommandOf } from '../lib/prompt-commands.mjs';
 import { createProxyClient } from '../lib/proxy.mjs';
 import { recordRecall } from '../lib/recall-log.mjs';
 import { queueReports } from '../lib/report-queue.mjs';
 import { correctionReportOf } from '../lib/reuse.mjs';
 import { dropCandidate } from '../lib/session-distill.mjs';
+import { statusReport } from '../lib/status-report.mjs';
 import { closeOpenTurn, readSession, updateSession } from '../lib/session-state.mjs';
 import { closeTurn } from '../lib/turn-end.mjs';
 import { forgetTurnRecord } from '../lib/turn-record.mjs';
 
 const RECALL_TIMEOUT_MS = 6_000;
+const COMMAND_PROXY_TIMEOUT_MS = 6_000;
 
 // Codex runs no Stop or Interrupt hook for a turn that ended on an error, so a turn still open when the next
 // prompt arrives is closed here as one.
@@ -55,11 +58,27 @@ async function recalledStrategy(sessionId, turn, prompt) {
   return match.text;
 }
 
+// A command is not a turn: it opens none, labels nothing and recalls nothing.
+function answerCommand(command, sessionId) {
+  const proxyFetch = createProxyClient({ timeoutMs: COMMAND_PROXY_TIMEOUT_MS });
+  return answerPromptCommand(command, {
+    sessionId,
+    status: () => statusReport(proxyFetch),
+    search: (text) => proxyFetch('POST', '/asset/search', { text, limit: 5 }),
+    startDistill: (id, focus) => startInBackground([DISTILL_SESSION_TASK], {
+      codexExecutable: hostProcess()?.executable,
+      session: { sessionId: id, focus },
+    }),
+  });
+}
+
 async function promptContext(input) {
   const sessionId = sessionIdOf(input);
   if (!sessionId) return '';
-  if (input.turn_id && input.turn_id === readSession(sessionId).turnId) return '';
   const prompt = typeof input.prompt === 'string' ? input.prompt.trim() : '';
+  const command = promptCommandOf(prompt);
+  if (command) return { blockReason: await answerCommand(command, sessionId) };
+  if (input.turn_id && input.turn_id === readSession(sessionId).turnId) return '';
   const closed = closeFailedTurn(sessionId, input);
   const followedUp = reportFollowUp(sessionId, closed.labelable, prompt);
   if (closed.queued || followedUp) startInBackground([DRAIN_TASK]);

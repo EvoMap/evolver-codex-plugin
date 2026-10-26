@@ -6,6 +6,7 @@ import { engineNoticeOf } from './engine-notice.mjs';
 import { engineDir } from './engine-runtime.mjs';
 import { readEngineState } from './engine-state.mjs';
 import { MIN_EVOLVER_VERSION } from './engine-version.mjs';
+import { readDistillLog } from './distill-log.mjs';
 import { describeProxyEndpoint } from './proxy.mjs';
 import { readRecallLog } from './recall-log.mjs';
 import { outboxPath } from './report-queue.mjs';
@@ -60,12 +61,19 @@ function reportLines(outbox) {
   ];
 }
 
-function candidateLines(pending) {
+function lastDistillLine({ last, counts }) {
+  if (!last) return [];
+  const tally = Object.entries(counts ?? {}).map(([status, count]) => `${status}=${count}`).join(' ');
+  return [`     last distillation ${last.status} for ${last.sessionId} at ${last.at}${last.error ? ` (${last.error})` : ''}; ${tally}`];
+}
+
+function candidateLines(pending, distillLog) {
   const sessions = Object.entries(pending);
-  if (sessions.length === 0) return [line('INFO', 'Distillation', 'no candidate waiting')];
+  if (sessions.length === 0) return [line('INFO', 'Distillation', 'no candidate waiting'), ...lastDistillLine(distillLog)];
   return [
     line('INFO', 'Distillation', `${sessions.length} candidate(s) waiting`),
     ...sessions.map(([sessionId, candidate]) => `     ${sessionId} turn ${candidate.turn} attempts=${candidate.attempts ?? 0}${candidate.closed ? ' closed' : ''}`),
+    ...lastDistillLine(distillLog),
   ];
 }
 
@@ -92,7 +100,7 @@ export async function statusReport(proxyFetch) {
     ...engineLines(readEngineState()),
     ...recallLines(readRecallLog()),
     ...reportLines(readState(outboxPath(), {})),
-    ...candidateLines(readState(pendingPath(), {})),
+    ...candidateLines(readState(pendingPath(), {}), readDistillLog()),
     ...claimLines(),
   ].join('\n');
 }

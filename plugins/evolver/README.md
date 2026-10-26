@@ -15,7 +15,7 @@ plugin's `scripts/evolver.mjs`.
 | Codex hook | What the plugin does |
 | --- | --- |
 | `SessionStart` | Reports the previous session's kept or reverted edits (retention) and the open strategies of a killed session (aborted), starts Evolver if it is missing or too old, and distills leftover candidates — all in a detached background worker. Adds no context, except a one-off notice when it installed, upgraded or could not start Evolver. |
-| `UserPromptSubmit` | Recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
+| `UserPromptSubmit` | Answers `evolver-status`, `evolver-search` and `evolver-distill` itself and blocks them from the model. Otherwise recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
 | `PreToolUse` (`Bash`, `apply_patch`) | Hashes the files a patch is about to touch, for the retention report. |
 | `PostToolUse` (`Bash`, `apply_patch`) | Notes the turn's commands, checks (test, build, lint, type check) with pass or fail, touched paths and the files its patches edited. |
 | `Stop` | Reports every strategy injected into the turn; shows you a one-line turn summary when the turn reused one; makes the turn the session's distillation candidate when it ended verified. A continuation another Stop hook starts joins the turn: its work re-judges the candidate (the reports have already gone out). |
@@ -56,8 +56,20 @@ and token from `~/.evolver/settings.json` (written by the Proxy), else `http://1
 
 ## Commands
 
-Codex plugins cannot add commands, so the commands dsh offers as `/evolver-*` are one script the person runs in
-a terminal. Nothing of it reaches the model.
+Codex plugins cannot add slash commands. Three of the commands dsh and Claude Code offer as `/evolver-*` are
+typed into the Codex prompt box as they are; the `UserPromptSubmit` hook answers them itself and blocks the
+prompt, so Codex sends it to no model, opens no turn and keeps nothing of it in the context. The answer is the
+hook's block reason, which Codex shows its client as a `feedback` entry.
+
+| Typed in Codex | What it does |
+| --- | --- |
+| `evolver-status` | The same report as the script's `status`, including how the last distillation ended. |
+| `evolver-search <text>` | Searches the EvoMap network (`POST /asset/search`). |
+| `evolver-distill [focus]` | Distills this session's latest verified turn in a background process (a distillation outlasts the hook's time); `evolver-status` shows how it ended. |
+
+Only a prompt that is exactly one of these counts (a leading `/` is accepted, though a client may keep slash
+input for its own commands); `evolver-status` followed by more text is an ordinary prompt. Every command, the
+long-running ones included, is also one script the person runs in a terminal:
 
 ```bash
 node ~/.codex/plugins/cache/evomap/evolver/<version>/scripts/evolver.mjs <command> [arguments]
