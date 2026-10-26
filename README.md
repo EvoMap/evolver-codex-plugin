@@ -6,7 +6,7 @@ Internal EvoMap marketplace repository for the official Evolver Codex Desktop pl
 
 | Plugin | Description |
 | --- | --- |
-| [**evolver**](plugins/evolver) | Self-evolution workflows for Codex Desktop: GEP guidance, Evolver CLI setup, and an MCP bridge to the EvoMap Proxy mailbox for Genes and Capsules. Powered by [`@evomap/evolver`](https://github.com/EvoMap/evolver). |
+| [**evolver**](plugins/evolver) | Evolver for Codex, from hooks only: recalls a proven strategy for each prompt, reports how it was reused, and distills verified work at session end. No tools or skill in the model's context. Powered by [`@evomap/evolver`](https://github.com/EvoMap/evolver). |
 
 ## Install
 
@@ -22,43 +22,30 @@ Then install the plugin:
 codex plugin add evolver@evomap
 ```
 
-Start a new Codex thread after installation so the bundled skill is loaded.
+Then open `/hooks` in Codex and trust the Evolver hooks: Codex skips plugin hooks until they are reviewed.
+Start a new Codex thread afterwards.
 
 **Local memory works with zero config** — no account, no key, nothing to fill
-in. Connecting to the EvoMap network (searching/reusing Genes & Capsules) is
+in. The plugin installs and starts Evolver in the background when it is missing.
+Connecting to the EvoMap network (searching/reusing Genes & Capsules) is
 optional: leave the node id blank, run `evolver` once in a git repo to get a
 claim link, and open it on [evomap.ai](https://evomap.ai) to connect. See
 [plugins/evolver](plugins/evolver#connecting-to-the-evomap-network-optional) for
 the full walkthrough.
 
-To inject or refresh the global Codex guidance section from the plugin itself,
-ask Codex to call `evolver_install_codex_guidance`. The tool updates
-`~/.codex/AGENTS.md` with marker-delimited Evolver instructions and creates a
-timestamped backup before changing an existing file.
-
-Optional, but recommended when you want the same machine-wide workflow in every
-Codex project:
-
-```bash
-npm install -g @evomap/evolver@latest
-evolver setup-hooks --platform=codex
-```
-
-That installs Codex hooks and an AGENTS.md section. Current Evolver versions tell
-Codex to use this plugin's MCP tools (`evolver_status`, `evolver_recipe_search`,
-`evolver_recipe_express`, fallback `evolver_search_assets`, `evolver_fetch_asset`, `evolver_publish_asset`) and let the Stop hook record
-local outcomes. If an older AGENTS.md section still says to call
-`gep_recall` / `gep_record_outcome`, upgrade `@evomap/evolver` and rerun
-`evolver setup-hooks --platform=codex`.
+The plugin registers no MCP tools and no skill; its commands (`status`, `search`,
+`distill`, `evolve`, `sync`, `review`, `run`, `solidify`) are one script you run in
+a terminal — see [plugins/evolver](plugins/evolver#commands).
 
 ## Develop locally
 
 ```bash
-# Validate the plugin manifest and skills
+# Run the tests and validate the plugin manifest
+npm test
 python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/evolver
 
 # Try the marketplace from this checkout
-codex plugin marketplace add /Users/seikiko/evolver-codex-plugin
+codex plugin marketplace add /path/to/evolver-codex-plugin
 codex plugin add evolver@evomap
 ```
 

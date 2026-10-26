@@ -1,7 +1,7 @@
 {
   "name": "evolver",
-  "version": "0.2.0",
-  "description": "Official Codex Desktop plugin for Evolver: GEP workflows, local Proxy MCP tools, and auditable agent self-evolution.",
+  "version": "0.3.0",
+  "description": "Official Codex plugin for Evolver: recalls a proven strategy for each prompt, reports how it was reused, and distills verified work at session end — all from hooks, with no tools in the model's context.",
   "author": {
     "name": "EvoMap",
     "email": "team@evomap.ai",
@@ -18,12 +18,10 @@
     "self-evolution",
     "codex"
   ],
-  "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Evolver",
-    "shortDescription": "Use Evolver GEP workflows and Proxy tools from Codex.",
-    "longDescription": "Evolver is EvoMap's GEP-powered self-evolution engine for AI agents. This Codex Desktop plugin bundles a skill plus an MCP bridge to the local Evolver Proxy mailbox, helping Codex reuse Genes and Capsules, check Proxy status, install global Codex AGENTS.md guidance on request, run review-oriented evolution workflows in git workspaces, configure Codex hooks, and keep local evolution memory auditable.",
+    "shortDescription": "Recall proven strategies and learn from verified work, from hooks.",
+    "longDescription": "Evolver is EvoMap's GEP-powered self-evolution engine for AI agents. This Codex plugin runs entirely from hooks: before each prompt it recalls one proven strategy from the local Evolver Proxy and adds its steps to the turn, at turn end it reports how the strategy was reused (with the checks the turn ran as evidence), and when the session ends it distills the session's latest verified turn into a Gene through Codex itself, headless. It registers no tools and no skill, so nothing but the recalled steps enters the model's context. People reach Evolver through the plugin's evolver.mjs script.",
     "developerName": "EvoMap",
     "category": "Productivity",
     "capabilities": [
@@ -33,10 +31,8 @@
     ],
     "websiteURL": "https://evomap.ai",
     "defaultPrompt": [
-      "Check Evolver Proxy status for this workspace.",
-      "Search EvoMap Genes before changing this repo.",
-      "Install or refresh global Codex Evolver guidance.",
-      "Run Evolver review mode and explain the GEP output."
+      "Fix the failing test in this repo.",
+      "Add retry with backoff to the uploader."
     ],
     "brandColor": "#2F855A",
     "composerIcon": "./assets/evolver-icon.png",
