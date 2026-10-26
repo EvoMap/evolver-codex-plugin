@@ -40,7 +40,10 @@ back as follows:
 - Codex with hooks enabled (`[features] hooks`, on by default). Plugin hooks run only once you trust them: open
   `/hooks` in Codex after installing or updating the plugin and approve the Evolver hooks. Approve them in the Codex you run the
   plugin with, or one as new: an older Codex lists only the events it knows (0.144 shows five of the seven), so
-  `Interrupt` and `SessionEnd` stay untrusted for a newer app.
+  `Interrupt` and `SessionEnd` stay untrusted for a newer app. Codex records each approval in `config.toml` as one
+  `[hooks.state."evolver@evomap:hooks/hooks.json:<event>:0:0"]` table (`trusted_hash`, and `trusted_content_hash`
+  from 0.164 on): seven tables, one per hook, whatever the version. An update changes the plugin's scripts, so
+  Codex shows the hooks as modified until you approve them again, which rewrites the same seven tables.
 - Node.js 20 or newer on the `PATH` Codex hooks see (hooks run through your login shell).
 - Evolver 2.0.44 or newer. The plugin installs it under `~/.evolver/state/codex-engine` and starts its Proxy in the
   background when it is missing; `npm install -g @evomap/evolver@latest` works too.
@@ -169,7 +172,10 @@ python3 ~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugin
 
 ## Uninstall
 
-Remove or disable the plugin from Codex Plugins. Local Evolver memory under `~/.evolver/` is left intact.
+Remove or disable the plugin from Codex Plugins (`codex plugin remove evolver@evomap`). Local Evolver memory under
+`~/.evolver/` is left intact. Codex keeps the seven `[hooks.state."evolver@evomap:…"]` approval tables in
+`config.toml` after a removal, so a reinstall of the same version needs no new approval; delete them by hand to
+forget the approvals.
 
 ## License
 

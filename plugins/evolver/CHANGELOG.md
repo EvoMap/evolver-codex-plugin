@@ -3,7 +3,7 @@
 All notable changes to the Evolver Codex Desktop plugin are documented here.
 This project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.3.1] - 2026-10-26
 
 ### Fixed
 - Session-end distillation no longer starts the MCP servers of the person's `config.toml` (they run outside the
@@ -15,6 +15,8 @@ This project follows Semantic Versioning.
   credentials and `--password`-style flags followed by a space.
 - The `evolver-*` engine commands run the Evolver the plugin installed when it is new enough, as the engine setup does.
 - `evolver-evolve` typed while a turn runs still hands that turn its instruction.
+- README: what the seven `hooks.state` approval tables in `config.toml` are, that an update asks for approval
+  again without adding tables, and that a removal leaves them behind.
 
 ### Added
 - The eight `evolver-*` commands typed into the Codex prompt box: the `UserPromptSubmit` hook answers them and
