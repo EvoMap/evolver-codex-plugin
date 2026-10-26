@@ -52,13 +52,14 @@ test("the person's own MCP servers are turned off by name for the distillation",
   assert.deepEqual(args.slice(-5), ['-m', 'gpt-test', '-C', '/tmp/x', '-']);
 });
 
-test('only enabled MCP servers with a plain name are taken from the listing; an unreadable one gives none', () => {
+test('only enabled MCP servers with a plain name are taken from the listing; an unreadable listing is no list', () => {
   const listing = JSON.stringify([
     { name: 'node_repl', enabled: true }, { name: 'codex_app', enabled: false }, { name: 'bad name"]', enabled: true },
   ]);
   assert.deepEqual(enabledMcpServersOf(listing), ['node_repl']);
-  assert.deepEqual(enabledMcpServersOf('Error: failed to load'), []);
-  assert.deepEqual(enabledMcpServersOf('{}'), []);
+  assert.deepEqual(enabledMcpServersOf('[]'), []);
+  assert.equal(enabledMcpServersOf('Error: failed to load'), null);
+  assert.equal(enabledMcpServersOf('{}'), null);
 });
 
 test('the runner turns off the MCP servers Codex lists under the same flags', async (t) => {
@@ -75,4 +76,28 @@ test('on Windows a codex.cmd shim starts through cmd.exe with escaped arguments;
   assert.deepEqual(shim.args, ['^^^"exec^^^"', '^^^"-m^^^"', '^^^"a^^^&b^^^"']);
   assert.deepEqual(spawnPlanOf('C:\\Codex\\codex.EXE', ['exec'], 'win32'), { command: 'C:\\Codex\\codex.EXE', args: ['exec'], shell: false });
   assert.deepEqual(spawnPlanOf('codex', ['exec'], 'darwin'), { command: 'codex', args: ['exec'], shell: false });
+});
+
+const execCalls = () => {
+  try {
+    return readFileSync(join(homedir(), 'fake-codex.log'), 'utf8').trim().split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+test('a distillation whose MCP servers cannot be listed does not run the model', async (t) => {
+  t.after(freshHome());
+  process.env.FAKE_CODEX_MCP = 'Error: failed to load bootstrap configuration';
+  t.after(() => delete process.env.FAKE_CODEX_MCP);
+  await assert.rejects(codexModelRunner({ executable: FAKE_CODEX })('gpt-test', 'p', AbortSignal.timeout(5_000)), /could not list the MCP servers/);
+  assert.deepEqual(execCalls(), []);
+});
+
+test('a distillation cancelled before its MCP servers are listed does not start the model', async (t) => {
+  t.after(freshHome());
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(codexModelRunner({ executable: FAKE_CODEX })('gpt-test', 'p', controller.signal), { code: 'ABORT_ERR' });
+  assert.deepEqual(execCalls(), []);
 });

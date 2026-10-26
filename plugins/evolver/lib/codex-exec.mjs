@@ -79,32 +79,43 @@ function startCodex(executable, args) {
   return { child, stop };
 }
 
+/** The enabled MCP servers a `codex mcp list --json` listing names, or null when the listing cannot be read. */
 export function enabledMcpServersOf(listJson) {
   try {
     const servers = JSON.parse(listJson);
-    return Array.isArray(servers)
-      ? servers.filter((server) => server?.enabled === true && MCP_SERVER_NAME.test(String(server.name))).map((server) => server.name)
-      : [];
+    if (!Array.isArray(servers)) return null;
+    return servers.filter((server) => server?.enabled === true && MCP_SERVER_NAME.test(String(server.name))).map((server) => server.name);
   } catch {
-    return [];
+    return null;
   }
 }
 
-/** The MCP servers the distillation would start, as Codex lists them under the same flags; none when it cannot say. */
-function enabledMcpServers(executable) {
-  return new Promise((resolve) => {
+/**
+ * The MCP servers the distillation would start, as Codex lists them under the same flags. Rejects when the list
+ * cannot be read, since running without it would start those servers, and when `signal` aborts meanwhile.
+ */
+function enabledMcpServers(executable, signal) {
+  return new Promise((resolve, reject) => {
     const { child, stop } = startCodex(executable, [...DISABLED_FEATURE_FLAGS, 'mcp', 'list', '--json']);
     let stdout = '';
     const timer = setTimeout(stop, MCP_LIST_TIMEOUT_MS);
+    signal?.addEventListener('abort', stop, { once: true });
+    const settle = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
+    };
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stdin.on('error', () => {});
-    child.on('error', () => {
-      clearTimeout(timer);
-      resolve([]);
+    child.on('error', (error) => {
+      settle();
+      reject(failure(error.message, error.code));
     });
     child.on('close', () => {
-      clearTimeout(timer);
-      resolve(enabledMcpServersOf(stdout));
+      settle();
+      const servers = enabledMcpServersOf(stdout);
+      if (signal?.aborted) reject(failure('cancelled', 'ABORT_ERR'));
+      else if (servers === null) reject(failure('could not list the MCP servers to turn off for the distillation'));
+      else resolve(servers);
     });
     child.stdin.end();
   });
@@ -112,11 +123,12 @@ function enabledMcpServers(executable) {
 
 /**
  * Asks Codex itself, headless, for one answer on `model`: the prompt goes in on stdin and the answer is read
- * off `--json` events. Rejects with code ENOENT when there is no Codex executable to run.
+ * off `--json` events. Rejects with code ENOENT when there is no Codex executable to run, and without running
+ * the model when the MCP servers cannot be listed or `signal` aborts first.
  */
 export function codexModelRunner({ executable = 'codex' } = {}) {
   return async (model, prompt, signal) => {
-    const mcpServers = await enabledMcpServers(executable);
+    const mcpServers = await enabledMcpServers(executable, signal);
     return answerOfExec(executable, { model, mcpServers }, prompt, signal);
   };
 }

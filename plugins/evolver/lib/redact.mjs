@@ -14,7 +14,7 @@ const SECRET_PATTERNS = [
   /\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*/gi,
   /(?<=\bCookie\s*:\s*)[^\n]+/gi,
   /(?<=(?:^|\s)(?:-u|--user)(?:\s+|=))[^\s:]+:\S+/g,
-  /(?<=--(?:[\w-]*-)?(?:password|passwd|token|secret|api-?key)\s+)[^\s-]\S*/gi,
+  /(?<=--(?:[\w-]*-)?(?:password|passwd|token|secret|api-?key)\s+)(?:"[^"\n]*"|'[^'\n]*'|[^\s-]\S*)/gi,
 ];
 
 export const REDACTED = '[redacted]';

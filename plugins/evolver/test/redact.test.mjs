@@ -53,3 +53,11 @@ test('basic auth, cookies, curl credentials and a password flag are redacted; th
     assert.equal(withoutSecrets(text), text);
   }
 });
+
+test('a quoted value after a password flag is redacted whole', () => {
+  for (const text of ['mysql --password "correct horse battery" -h db', "deploy --token 'two words here'"]) {
+    const cleaned = withoutSecrets(text);
+    assert.doesNotMatch(cleaned, /horse|battery|words|here/, text);
+  }
+  assert.match(withoutSecrets('mysql --password "correct horse battery" -h db'), /-h db$/);
+});
