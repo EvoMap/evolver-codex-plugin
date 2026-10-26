@@ -67,3 +67,16 @@ test('a long job runs in one process at a time, and a dead holder does not block
   fs.writeFileSync(statePath('job.lock'), `${deadPid()}:dead`);
   assert.equal(await withLock('job', async () => {}), true);
 });
+
+test('a fresh test home is where os.homedir() points, and the environment is restored exactly', async () => {
+  const { homedir } = await import('node:os');
+  const { freshHome } = await import('./helpers/sandbox.mjs');
+  const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  const restore = freshHome('evolver-fresh-home-');
+  const home = process.env.HOME;
+  assert.equal(homedir(), home);
+  restore();
+  assert.equal(process.env.HOME, before.HOME);
+  assert.equal(process.env.USERPROFILE, before.USERPROFILE);
+  assert.equal('USERPROFILE' in process.env, before.USERPROFILE !== undefined);
+});
