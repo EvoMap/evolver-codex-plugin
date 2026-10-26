@@ -206,6 +206,17 @@ test('evolver-evolve hands the model its instruction as the turn context, withou
   assert.deepEqual(proxy.of('/asset/fetch'), []);
 });
 
+test('evolver-evolve typed while a turn runs still hands that turn its instruction, without a new turn', async () => {
+  await startSandbox();
+  const s = session('s-steer-evolve');
+  await s.prompt('用 Node 写一个 LRU cache，带 get/set 和淘汰');
+  const steered = await s.prompt('evolver-evolve the retry', { sameTurn: true });
+  assert.match(steered.hookSpecificOutput.additionalContext, /^Take a deliberate evolution step for the current task\.[\s\S]*Focus: the retry$/);
+  await s.stop('Done.');
+  const [report] = await waitFor(() => proxy.of('/asset/reuse-result'));
+  assert.equal(report.task_id, 'codex:s-steer-evolve:1');
+});
+
 test('a correction in the next prompt sends an L3 follow-up under :correction', async () => {
   await startSandbox();
   const s = session('s-fix');

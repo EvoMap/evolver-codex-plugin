@@ -89,7 +89,9 @@ async function promptContext(input) {
   const answer = command ? await answerCommand(command, sessionId, input) : null;
   // A command answered here is no turn: it opens none, labels nothing and recalls nothing.
   if (answer?.blockReason) return answer;
-  if (input.turn_id && input.turn_id === readSession(sessionId).turnId) return '';
+  // Input typed while a turn runs reaches this hook again with that turn's id: it opens no new turn, though
+  // an `evolver-evolve` among it still hands the turn its instruction.
+  if (input.turn_id && input.turn_id === readSession(sessionId).turnId) return answer?.context ?? '';
   const closed = closeFailedTurn(sessionId, input);
   const followedUp = reportFollowUp(sessionId, closed.labelable, prompt);
   if (closed.queued || followedUp) startInBackground([DRAIN_TASK]);
