@@ -40,7 +40,7 @@ test('a missing evolver executable falls back to the npx package this plugin is 
     calls.push([file, ...args]);
     return file === 'evolver' ? { error: Object.assign(new Error('spawn evolver ENOENT'), { code: 'ENOENT' }) } : { error: null, output: 'synced' };
   };
-  assert.deepEqual(await runEvolverCli(['sync', '--dry-run'], { run }), { kind: 'success', text: 'synced' });
+  assert.deepEqual(await runEvolverCli(['sync', '--dry-run'], { run, managedEntry: async () => null }), { kind: 'success', text: 'synced' });
   assert.deepEqual(calls[1], ['npx', '-y', '@evomap/evolver@^2.0.44', 'sync', '--dry-run']);
 });
 
@@ -58,7 +58,7 @@ test('on Windows a failed run whose evolver `where` cannot find falls back to np
     return file === 'evolver' ? { error: notRecognized, output: "'evolver' is not recognized" } : { error: null, output: 'synced' };
   };
   const isMissing = (error, name) => isMissingExecutable(error, name, windows(false));
-  assert.deepEqual(await runEvolverCli(['sync'], { run, isMissing }), { kind: 'success', text: 'synced' });
+  assert.deepEqual(await runEvolverCli(['sync'], { run, isMissing, managedEntry: async () => null }), { kind: 'success', text: 'synced' });
   assert.deepEqual(calls[1], ['npx', '-y', '@evomap/evolver@^2.0.44', 'sync']);
 });
 
@@ -79,4 +79,25 @@ test('a timed-out CLI run ends its whole tree: the process group on POSIX, taskk
   const signals = [];
   endTree(4242, { platform: 'linux', killWindowsTree: () => signals.push('taskkill'), signal: (pid, name) => signals.push(`${pid}:${name}`) });
   assert.deepEqual(signals, ['4242:SIGTERM']);
+});
+
+test('the engine commands run the Evolver the plugin installed, with node and no shell, in the project', async () => {
+  const calls = [];
+  const run = async (file, args, options) => {
+    calls.push({ file, args, options });
+    return { error: null, output: 'reviewed' };
+  };
+  const result = await runEvolverCli(['review'], { run, cwd: '/repo', managedEntry: async () => '/state/codex-engine/evolver.js' });
+  assert.deepEqual(result, { kind: 'success', text: 'reviewed' });
+  assert.deepEqual(calls, [{ file: process.execPath, args: ['/state/codex-engine/evolver.js', 'review'], options: { cwd: '/repo', shell: false } }]);
+});
+
+test('without a usable installed Evolver the evolver on PATH runs', async () => {
+  const calls = [];
+  const run = async (file, args) => {
+    calls.push([file, ...args]);
+    return { error: null, output: 'ok' };
+  };
+  await runEvolverCli(['sync'], { run, managedEntry: async () => null });
+  assert.deepEqual(calls, [['evolver', 'sync']]);
 });
