@@ -5,12 +5,55 @@ This project follows Semantic Versioning.
 
 ## [Unreleased]
 
-### Changed
+### Added
+- The eight `evolver-*` commands typed into the Codex prompt box: the `UserPromptSubmit` hook answers them and
+  blocks the prompt, so nothing reaches the model and no turn opens; `evolver-evolve` instead gives the turn its
+  checkpoint instruction. `evolver-distill` and the engine commands (`sync`, `review`, `run`, `solidify`, run in
+  the project) go on in background processes; the status report shows how the last distillation and the last
+  engine command ended.
+- A one-line turn summary for a turn that reused a strategy, as the `Stop` hook's `systemMessage`: whether the
+  goal was reached by the last check, the reused strategy, and the estimated tokens saved (the Claude Code
+  plugin's reference-reuse estimate, capped at the turn's own fresh tokens from the Codex transcript).
+
+## [0.3.0] - 2026-10-26
+
+Aligned with the DeepSeek Harness plugin (dsh-evolver 0.3.0): Evolver stays out of the model context.
+
+### Added
+- Codex hooks (`hooks/hooks.json`) for the whole pipeline: `UserPromptSubmit` recalls one strategy by the
+  prompt text and adds it as `additionalContext`, ending with `Apply them where they fit.`; `PreToolUse` /
+  `PostToolUse` record the turn's commands, checks, paths and patches (also `apply_patch` run through the
+  shell); `Stop` reports every injected strategy with the turn's evidence (`codex:<session>:<turn>`);
+  `Interrupt` and `SessionEnd` report aborted ones; `SessionStart` sends retention reports and the aborted
+  reports of killed sessions, and sets Evolver up in the background.
+- Follow-up correction/praise reports, retention reports, a report outbox with retries, and local root-event
+  records through the installed Evolver's core.
+- Reuse reports say `applied: used` for every injected strategy; how the turn went (its last check, the next
+  prompt, kept edits) says whether the strategy helped.
+- Session-end distillation: a verified turn, one that reused a strategy included, becomes the session's candidate
+  (`~/.evolver/state/codex-distill-pending.json`), dropped by a correction, and is distilled once by Codex
+  itself, headless (`codex exec`, read-only, hooks/plugins/shell off, on the session's model), then sent to
+  `POST /conversation/distill` with `platform: 'codex'`. Three tries; leftovers of ended or killed sessions are
+  claimed by the next session start. State writes go through a shared lock.
+- `scripts/evolver.mjs` with `status`, `search`, `distill`, `evolve`, `sync`, `review`, `run`, `solidify`,
+  run by the person in a terminal (Codex plugins cannot add commands).
+- `npm test` (node --test) for the libraries and the hooks.
+- Works on Codex 0.144+: `Interrupt` (0.150+) and `SessionEnd` (0.145+) are ignored by older versions, which
+  fall back to closing an interrupted turn at the next prompt and to the owner process's exit.
+
+### Removed
+- The `evolver-proxy` MCP server (`.mcp.json`, `mcp/evolver-proxy.mjs`) and every `evolver_*` tool.
+- The `evolver` skill: Codex cannot keep a plugin skill out of the context, and dsh ships its skill off.
+- `scripts/evolver-status.js`, replaced by `scripts/evolver.mjs status`.
+- If you ran `evolver setup-hooks --platform=codex`, remove the Evolver section it wrote to
+  `~/.codex/AGENTS.md` and its hooks: they name the removed tools.
+
+### Changed since 0.2.0 (the MCP parts are superseded by the removal above)
 - MCP bridge is Recipe-first: `evolver_recipe_search` then `evolver_recipe_express`
   against Proxy `/recipe/search` and `/recipe/express`. `evolver_search_assets`
   remains as Gene/Capsule fallback when no Recipe hits.
 
-### Changed — onboarding UX
+### Changed since 0.2.0 — onboarding UX
 
 - `A2A_NODE_ID` guidance reworded across the README and skill to make **leaving
   it blank** the clear default: the first run registers a fresh node and prints a

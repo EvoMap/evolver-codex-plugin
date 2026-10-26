@@ -1,0 +1,12 @@
+{
+  "name": "evolver-codex-plugin",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test plugins/evolver/test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
