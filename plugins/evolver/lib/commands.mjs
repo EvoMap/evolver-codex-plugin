@@ -25,39 +25,68 @@ function shown(value) {
   return text.length > OUTPUT_MAX_CHARS ? `${text.slice(0, OUTPUT_MAX_CHARS)}\n…` : text;
 }
 
-// The CLI starts the Proxy and workers of its own, so a timed-out run takes down the whole process group it
-// leads rather than only the process this plugin started. Windows has no group to signal.
-const grouped = process.platform !== 'win32';
+const IS_WINDOWS = process.platform === 'win32';
 
-function endTree(child) {
-  const target = grouped ? -child.pid : child.pid;
-  const signalTree = (name) => {
-    try {
-      process.kill(target, name);
-    } catch {
-    }
-  };
-  signalTree('SIGTERM');
-  setTimeout(() => signalTree('SIGKILL'), KILL_GRACE_MS).unref?.();
+// The CLI starts the Proxy and workers of its own, so a timed-out run takes down the whole tree it leads rather
+// than only the process this plugin started: its process group on POSIX, and through taskkill on Windows, where
+// the child is the cmd.exe that runs the npm shim.
+function taskkill(pid) {
+  execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
+}
+
+function signalGroup(pid, name) {
+  try {
+    process.kill(-pid, name);
+  } catch {
+  }
+}
+
+export function endTree(pid, { platform = process.platform, killWindowsTree = taskkill, signal = signalGroup } = {}) {
+  if (platform === 'win32') return killWindowsTree(pid);
+  signal(pid, 'SIGTERM');
+  setTimeout(() => signal(pid, 'SIGKILL'), KILL_GRACE_MS).unref?.();
+}
+
+// `evolver` and `npx` are npm .cmd shims on Windows, which only run through cmd.exe. cmd.exe reads the line
+// once and the shim re-reads its arguments, so each argument is quoted for the C runtime and its cmd
+// metacharacters are caret-escaped twice, so that none of them runs as a command.
+const CMD_METACHARACTERS = /([()\][%!^"`<>&|;, *?])/g;
+
+export function cmdArgument(arg) {
+  const quoted = `"${String(arg).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
+  return quoted.replace(CMD_METACHARACTERS, '^$1').replace(CMD_METACHARACTERS, '^$1');
 }
 
 function execute(file, args) {
   return new Promise((resolve) => {
     let timer = null;
-    const child = execFile(file, args, { maxBuffer: 16 * 1024 * 1024, detached: grouped, shell: process.platform === 'win32' }, (error, stdout, stderr) => {
+    const options = { maxBuffer: 16 * 1024 * 1024, detached: !IS_WINDOWS, shell: IS_WINDOWS, windowsHide: true };
+    const child = execFile(file, IS_WINDOWS ? args.map(cmdArgument) : args, options, (error, stdout, stderr) => {
       clearTimeout(timer);
       resolve({ error, output: `${stdout ?? ''}${stderr ? `\n${stderr}` : ''}`.trim() });
     });
     if (!child.pid) return;
-    timer = setTimeout(() => endTree(child), CLI_TIMEOUT_MS);
+    timer = setTimeout(() => endTree(child.pid), CLI_TIMEOUT_MS);
     timer.unref?.();
   });
 }
 
+function isOnWindowsPath(name) {
+  return new Promise((resolve) => execFile('where', [name], { windowsHide: true }, (error) => resolve(!error)));
+}
+
+// Through cmd.exe a missing command is only a non-zero exit with a localized message, so on Windows a failed
+// run asks `where` whether `evolver` exists at all.
+export async function isMissingExecutable(error, name, { platform = process.platform, isOnPath = isOnWindowsPath } = {}) {
+  if (!error) return false;
+  if (error.code === 'ENOENT') return true;
+  return platform === 'win32' && !(await isOnPath(name));
+}
+
 // The installed `evolver` when there is one, else the published package through npx.
-export async function runEvolverCli(args, { run = execute } = {}) {
+export async function runEvolverCli(args, { run = execute, isMissing = isMissingExecutable } = {}) {
   let { error, output } = await run('evolver', args);
-  if (error?.code === 'ENOENT') ({ error, output } = await run('npx', ['-y', CLI_PACKAGE, ...args]));
+  if (await isMissing(error, 'evolver')) ({ error, output } = await run('npx', ['-y', CLI_PACKAGE, ...args]));
   return error ? failure(shown(output || String(error.message))) : success(shown(output || 'done'));
 }
 

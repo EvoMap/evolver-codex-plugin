@@ -5,7 +5,7 @@ import { isSetupDue } from '../lib/engine-setup.mjs';
 import { isAnnounced, markAnnounced, readEngineState } from '../lib/engine-state.mjs';
 import { meetsMinimum } from '../lib/engine-version.mjs';
 import { runHook, sessionIdOf } from '../lib/hook-io.mjs';
-import { takeOrphanedUnreported } from '../lib/injected-assets.mjs';
+import { queueOrphanedUnreported } from '../lib/injected-assets.mjs';
 import { hostProcess } from '../lib/process-owner.mjs';
 import { projectDirOf } from '../lib/project-dir.mjs';
 import { runningProxy } from '../lib/proxy.mjs';
@@ -15,8 +15,9 @@ import { abortedReports } from '../lib/turn-end.mjs';
 
 function queueLeftReports(sessionId, projectDir) {
   const { due, commit } = takeDueRetentions({ sessionId, projectDir });
-  queueReports([...due.flatMap(retentionReportsOf), ...abortedReports(takeOrphanedUnreported())]);
+  queueReports(due.flatMap(retentionReportsOf));
   commit();
+  queueOrphanedUnreported((orphaned) => queueReports(abortedReports(orphaned)));
 }
 
 // Setting Evolver up takes minutes, so it runs in the background and only its outcome is told, once.

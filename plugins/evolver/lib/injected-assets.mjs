@@ -65,28 +65,27 @@ export function takeUnreported(sessionKey, turn, now = Date.now()) {
 
 /**
  * Injections no turn end ever reported, from sessions whose Codex process is gone: a process killed mid-turn
- * leaves them behind. They are taken, marked reported and returned for an aborted report. A session that is
- * merely idle keeps its open injections.
+ * leaves them behind. Each ledger's are handed to `queue` and only then marked reported, so a queue that
+ * fails leaves them for the next session start; a report queued twice settles once in the outbox. A session
+ * that is merely idle keeps its open injections.
  */
-export function takeOrphanedUnreported({ isGone = ownerIsGone, now = Date.now() } = {}) {
+export function queueOrphanedUnreported(queue, { isGone = ownerIsGone, now = Date.now() } = {}) {
   let files = [];
   try {
     files = fs.readdirSync(stateDir()).filter((file) => file.startsWith(`${LEDGER_PREFIX}-`) && file.endsWith('.json'));
   } catch {
-    return [];
+    return;
   }
-  const orphaned = [];
   for (const file of files) {
     updateState(path.join(stateDir(), file), {}, (ledger) => {
       const due = Object.entries(ledger)
         .filter(([, entry]) => !entry?.reportedAt && entry?.sessionId && isGone(entry.pid))
         .map(([assetId, entry]) => ({ assetId, strategyText: entry.strategyText ?? '', turn: entry.turn, sessionId: entry.sessionId }));
       if (due.length === 0) return undefined;
-      orphaned.push(...due);
+      queue(due);
       return withReported(ledger, due.map((asset) => asset.assetId), now);
     });
   }
-  return orphaned;
 }
 
 export function forgetSession(sessionKey) {

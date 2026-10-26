@@ -40,7 +40,8 @@ function readSettingsProxy() {
 function readProxySettings(port) {
   const proxy = readSettingsProxy();
   const url = proxy?.url ? normalizeLoopbackUrl(proxy.url) : null;
-  const token = proxy?.token ? String(proxy.token) : null;
+  // The token belongs to the URL it was written with; a default port may be served by another process.
+  const token = url && proxy?.token ? String(proxy.token) : null;
   return { url: url ?? `http://127.0.0.1:${port}`, token, fromSettings: url !== null };
 }
 
@@ -86,6 +87,7 @@ export function createProxyClient({
     if (token) headers.Authorization = `Bearer ${token}`;
 
     let response;
+    let text;
     try {
       const timeout = AbortSignal.timeout(timeoutMs);
       const signal = callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout;
@@ -95,13 +97,13 @@ export function createProxyClient({
         body: body === undefined ? undefined : JSON.stringify(body),
         signal,
       });
+      text = await response.text();
     } catch (error) {
       if (callerSignal?.aborted) return { ok: false, error: 'Proxy request cancelled.' };
       const what = error?.name === 'TimeoutError' ? 'Proxy request timed out' : `Proxy connection failed: ${error?.message}`;
       return { ok: false, unreachable: true, error: `${what}. Evolver Proxy not reachable at ${base}. ${START_HINT}` };
     }
 
-    const text = await response.text();
     let data;
     try {
       data = text ? JSON.parse(text) : {};

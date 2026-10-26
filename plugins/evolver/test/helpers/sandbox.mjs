@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const pluginRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -19,7 +19,7 @@ export function sandboxHome() {
   chmodSync(join(bin, 'codex'), 0o755);
   return {
     home,
-    env: { ...process.env, HOME: home, USERPROFILE: home, PLUGIN_ROOT: pluginRoot, EVOMAP_PROXY_PORT: '1', PATH: `${bin}:${dirname(process.execPath)}:${SYSTEM_PATH}` },
+    env: { ...process.env, HOME: home, USERPROFILE: home, PLUGIN_ROOT: pluginRoot, EVOMAP_PROXY_PORT: '1', PATH: [bin, dirname(process.execPath), SYSTEM_PATH].join(delimiter) },
     cleanup: () => rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 }),
   };
 }
@@ -83,7 +83,15 @@ export function runHook(name, input, env) {
       stderr += chunk;
     });
     child.on('error', reject);
-    child.on('exit', (code) => (code === 0 ? resolve(stdout ? JSON.parse(stdout) : {}) : reject(new Error(`${name} exited ${code}: ${stderr}`))));
+    // `close`, not `exit`: only `close` guarantees the hook's output has been read to the end.
+    child.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`${name} exited ${code}: ${stderr}`));
+      try {
+        resolve(stdout ? JSON.parse(stdout) : {});
+      } catch (error) {
+        reject(new Error(`${name} printed output that is not JSON: ${error.message}\n${stdout}`));
+      }
+    });
     child.stdin.end(JSON.stringify(input));
   });
 }
