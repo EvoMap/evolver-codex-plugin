@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -15,8 +16,43 @@ function globalPackageRoots() {
   return process.platform === 'win32' ? [path.join(nodeDir, ENGINE_PACKAGE)] : [path.join(nodeDir, '..', 'lib', ENGINE_PACKAGE)];
 }
 
-// This plugin ships no node_modules, so the core is resolved through the Evolver it set up, or the global one.
-export function evolverCoreEntry(manifests = [path.join(engineDir(), ENGINE_PACKAGE), ...globalPackageRoots()]) {
+function isEngineManifest(manifest) {
+  try {
+    return JSON.parse(fs.readFileSync(manifest, 'utf8')).name === '@evomap/evolver';
+  } catch {
+    return false;
+  }
+}
+
+// npm links `evolver` on POSIX to the package's bin script; walking up from its real path finds the package.
+function linkedEngineManifest(bin) {
+  let dir = path.dirname(fs.realpathSync(bin));
+  while (dir !== path.dirname(dir)) {
+    const manifest = path.join(dir, 'package.json');
+    if (isEngineManifest(manifest)) return [manifest];
+    dir = path.dirname(dir);
+  }
+  return [];
+}
+
+/**
+ * The package behind the `evolver` the engine setup found on PATH, wherever npm's global prefix is: a custom
+ * prefix, or `%APPDATA%\npm` on Windows, where npm puts an `evolver.cmd` shim beside the prefix's node_modules.
+ */
+export function pathEngineManifests({ env = process.env, platform = process.platform } = {}) {
+  const dirs = String(env.PATH ?? env.Path ?? '').split(platform === 'win32' ? ';' : ':').filter(Boolean);
+  return dirs.flatMap((dir) => {
+    try {
+      if (platform === 'win32') return fs.existsSync(path.join(dir, 'evolver.cmd')) ? [path.join(dir, ENGINE_PACKAGE)] : [];
+      return fs.existsSync(path.join(dir, 'evolver')) ? linkedEngineManifest(path.join(dir, 'evolver')) : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+// This plugin ships no node_modules, so the core is resolved through the Evolver it set up, or a global one.
+export function evolverCoreEntry(manifests = [path.join(engineDir(), ENGINE_PACKAGE), ...pathEngineManifests(), ...globalPackageRoots()]) {
   for (const manifest of manifests) {
     try {
       return createRequire(manifest).resolve(CORE_PACKAGE);

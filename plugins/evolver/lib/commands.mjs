@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { MIN_EVOLVER_VERSION } from './engine-version.mjs';
+import { engineRuntime } from './engine-runtime.mjs';
+import { MIN_EVOLVER_VERSION, meetsMinimum } from './engine-version.mjs';
 import { splitFrontmatter } from './frontmatter.mjs';
 
 // Codex plugins cannot add commands, so a person reaches Evolver through this plugin's own script, run in
@@ -57,11 +58,11 @@ export function cmdArgument(arg) {
   return quoted.replace(CMD_METACHARACTERS, '^$1').replace(CMD_METACHARACTERS, '^$1');
 }
 
-function execute(file, args, { cwd } = {}) {
+function execute(file, args, { cwd, shell = IS_WINDOWS } = {}) {
   return new Promise((resolve) => {
     let timer = null;
-    const options = { maxBuffer: 16 * 1024 * 1024, detached: !IS_WINDOWS, shell: IS_WINDOWS, windowsHide: true, cwd };
-    const child = execFile(file, IS_WINDOWS ? args.map(cmdArgument) : args, options, (error, stdout, stderr) => {
+    const options = { maxBuffer: 16 * 1024 * 1024, detached: !IS_WINDOWS, shell, windowsHide: true, cwd };
+    const child = execFile(file, shell ? args.map(cmdArgument) : args, options, (error, stdout, stderr) => {
       clearTimeout(timer);
       resolve({ error, output: `${stdout ?? ''}${stderr ? `\n${stderr}` : ''}`.trim() });
     });
@@ -83,12 +84,24 @@ export async function isMissingExecutable(error, name, { platform = process.plat
   return platform === 'win32' && !(await isOnPath(name));
 }
 
-// The installed `evolver` when there is one, else the published package through npx, in `cwd` (the project
-// `evolver run` and `solidify` work on; this process's own directory when none is given).
-export async function runEvolverCli(args, { run = execute, isMissing = isMissingExecutable, cwd } = {}) {
-  let { error, output } = await run('evolver', args, { cwd });
-  if (await isMissing(error, 'evolver')) ({ error, output } = await run('npx', ['-y', CLI_PACKAGE, ...args], { cwd }));
+// The engine setup prefers the Evolver it installed once that one is new enough, so the commands run the same.
+async function managedEngineEntry() {
+  const engine = await engineRuntime().managedEngine();
+  return engine && meetsMinimum(engine.version) ? engine.path : null;
+}
+
+function outcomeOf({ error, output }) {
   return error ? failure(shown(output || String(error.message))) : success(shown(output || 'done'));
+}
+
+// The Evolver the plugin installed, else the installed `evolver`, else the published package through npx, in
+// `cwd` (the project `evolver run` and `solidify` work on; this process's own directory when none is given).
+export async function runEvolverCli(args, { run = execute, isMissing = isMissingExecutable, cwd, managedEntry = managedEngineEntry } = {}) {
+  const entry = await managedEntry();
+  if (entry) return outcomeOf(await run(process.execPath, [entry, ...args], { cwd, shell: false }));
+  let result = await run('evolver', args, { cwd });
+  if (await isMissing(result.error, 'evolver')) result = await run('npx', ['-y', CLI_PACKAGE, ...args], { cwd });
+  return outcomeOf(result);
 }
 
 function cliCommand(subcommand, description, hint, runCli) {

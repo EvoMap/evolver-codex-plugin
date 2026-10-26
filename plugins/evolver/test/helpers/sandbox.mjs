@@ -28,12 +28,23 @@ export function sandboxHome() {
 }
 
 /** Points this process's own state at a fresh HOME for lib-level tests; returns the restore. */
+const HOME_KEYS = ['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'];
+
+// On Windows `os.homedir()` reads USERPROFILE, not HOME; a key that was unset is deleted again, not set to "undefined".
 export function freshHome(prefix = 'evolver-codex-lib-') {
-  const previous = process.env.HOME;
+  const previous = Object.fromEntries(HOME_KEYS.map((key) => [key, process.env[key]]));
   const home = mkdtempSync(join(tmpdir(), prefix));
   process.env.HOME = home;
+  if (process.platform === 'win32') {
+    process.env.USERPROFILE = home;
+    process.env.HOMEDRIVE = home.slice(0, 2);
+    process.env.HOMEPATH = home.slice(2);
+  }
   return () => {
-    process.env.HOME = previous;
+    for (const key of HOME_KEYS) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
     rmSync(home, { recursive: true, force: true });
   };
 }

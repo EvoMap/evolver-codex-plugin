@@ -28,3 +28,36 @@ test('code identifiers that merely end in a secret word are left alone', () => {
 test('a secret behind an unclosed quote is still redacted', () => {
   for (const text of ['API_KEY="abcdef123456', "TOKEN='abcdef123456"]) assert.doesNotMatch(withoutSecrets(text), /abcdef123456/, text);
 });
+
+test('a secret under a quoted JSON key is redacted', () => {
+  for (const text of ['{"token":"abcdef123456"}', "{'api_key': 'abcdef123456'}", '{"client_secret" : "abcdef123456", "user": "ann"}']) {
+    const cleaned = withoutSecrets(text);
+    assert.doesNotMatch(cleaned, /abcdef123456/, text);
+    assert.match(cleaned, /\[redacted\]/, text);
+  }
+  assert.match(withoutSecrets('{"client_secret" : "abcdef123456", "user": "ann"}'), /"user": "ann"/);
+});
+
+test('basic auth, cookies, curl credentials and a password flag are redacted; their words in prose are not', () => {
+  const cases = {
+    'curl -H "Authorization: Basic dXNlcjpodW50ZXIy" https://x': /dXNlcjpodW50ZXIy/,
+    'Cookie: session=abc123def456; theme=dark': /abc123def456|theme=dark/,
+    'curl -u ann:hunter22 https://x': /hunter22/,
+    'curl --user=ann:hunter22 https://x': /hunter22/,
+    'mysql --password hunter22hunter -h db': /hunter22hunter/,
+    'deploy --api-key abcdef123456': /abcdef123456/,
+  };
+  for (const [text, secret] of Object.entries(cases)) assert.doesNotMatch(withoutSecrets(text), secret, text);
+  assert.match(withoutSecrets('mysql --password hunter22hunter -h db'), /-h db$/);
+  for (const text of ['Basic configuration of the uploader', 'The cookie banner is broken', 'Use -u to update']) {
+    assert.equal(withoutSecrets(text), text);
+  }
+});
+
+test('a quoted value after a password flag is redacted whole', () => {
+  for (const text of ['mysql --password "correct horse battery" -h db', "deploy --token 'two words here'"]) {
+    const cleaned = withoutSecrets(text);
+    assert.doesNotMatch(cleaned, /horse|battery|words|here/, text);
+  }
+  assert.match(withoutSecrets('mysql --password "correct horse battery" -h db'), /-h db$/);
+});

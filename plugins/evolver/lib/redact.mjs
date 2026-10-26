@@ -10,7 +10,11 @@ const SECRET_PATTERNS = [
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
   /\bBearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/]+@/gi,
-  /\b(?:\w*[_-])?(?:api[_-]?key|secret|token|passw(?:or)?d|pwd|access[_-]?key|private[_-]?key|client[_-]?secret)\b\s*[:=]\s*(?:"[^"\n]{6,}"|'[^'\n]{6,}'|["']?[^\s"',;]{6,})/gi,
+  /\b(?:\w*[_-])?(?:api[_-]?key|secret|token|passw(?:or)?d|pwd|access[_-]?key|private[_-]?key|client[_-]?secret)\b["']?\s*[:=]\s*(?:"[^"\n]{6,}"|'[^'\n]{6,}'|["']?[^\s"',;]{6,})/gi,
+  /\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*/gi,
+  /(?<=\bCookie\s*:\s*)[^\n]+/gi,
+  /(?<=(?:^|\s)(?:-u|--user)(?:\s+|=))[^\s:]+:\S+/g,
+  /(?<=--(?:[\w-]*-)?(?:password|passwd|token|secret|api-?key)\s+)(?:"[^"\n]*"|'[^'\n]*'|[^\s-]\S*)/gi,
 ];
 
 export const REDACTED = '[redacted]';
