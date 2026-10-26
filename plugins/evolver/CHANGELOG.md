@@ -18,7 +18,9 @@ Aligned with the DeepSeek Harness plugin (dsh-evolver 0.3.0): Evolver stays out 
   reports of killed sessions, and sets Evolver up in the background.
 - Follow-up correction/praise reports, retention reports, a report outbox with retries, and local root-event
   records through the installed Evolver's core.
-- Session-end distillation: a verified turn that reused no strategy becomes the session's candidate
+- Reuse reports say `applied: used` for every injected strategy; how the turn went (its last check, the next
+  prompt, kept edits) says whether the strategy helped.
+- Session-end distillation: a verified turn, one that reused a strategy included, becomes the session's candidate
   (`~/.evolver/state/codex-distill-pending.json`), dropped by a correction, and is distilled once by Codex
   itself, headless (`codex exec`, read-only, hooks/plugins/shell off, on the session's model), then sent to
   `POST /conversation/distill` with `platform: 'codex'`. Three tries; leftovers of ended or killed sessions are

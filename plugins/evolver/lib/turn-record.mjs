@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { patchApplied, patchedContent, patchedPaths, patchOf } from './apply-patch.mjs';
+import { patchApplied, patchedPaths, patchOf } from './apply-patch.mjs';
 import { contentHashOf } from './retention-pending.mjs';
 import { appendStateLine, hashedName, removeState, statePath, takeStateLines } from './state-file.mjs';
 import { isVerificationCommand, runningSessionOf, shellCheckFailed } from './verification.mjs';
@@ -8,7 +8,6 @@ import { isVerificationCommand, runningSessionOf, shellCheckFailed } from './ver
 export const SHELL_TOOL = 'Bash';
 export const PATCH_TOOL = 'apply_patch';
 
-const TURN_EDITED_MAX_CHARS = 200_000;
 const CHECK_COMMAND_MAX_CHARS = 200;
 const PATH_KEYS = ['path', 'file_path'];
 
@@ -27,7 +26,8 @@ export function noteFilesBeforePatch(sessionId, cwd, { tool_name: name, tool_inp
 
 function patchFields(patch, response) {
   if (!patch) return {};
-  return { paths: patchedPaths(patch), content: patchApplied(response) ? patchedContent(patch) : '' };
+  const paths = patchedPaths(patch);
+  return { paths, edited: patchApplied(response) ? paths : [] };
 }
 
 // A command still running at its wait limit has no verdict yet. Codex reports its completion later as another
@@ -78,9 +78,7 @@ function addNote(record, note, pending) {
   if (typeof note.command === 'string' && !isCompletion) record.commands.push(note.command);
   if (note.check) record.checks.push(note.check);
   record.paths.push(...(note.paths ?? []));
-  const editedChars = record.edits.reduce((total, edit) => total + edit.length, 0);
-  const kept = String(note.content ?? '').slice(0, TURN_EDITED_MAX_CHARS - editedChars);
-  if (kept) record.edits.push(kept);
+  record.edits.push(...(note.edited ?? []));
 }
 
 export function turnRecordOf(notes) {

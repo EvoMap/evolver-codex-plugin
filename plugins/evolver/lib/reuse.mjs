@@ -1,4 +1,3 @@
-import { UNKNOWN } from './applied.mjs';
 import { checkEvidenceOf } from './checks.mjs';
 import { REJECTED, RETRY, SENT, isSettled, withAttempt } from './report-outbox.mjs';
 import { outcomeOfReason } from './turn-outcomes.mjs';
@@ -11,16 +10,15 @@ function turnTaskId(sessionId, turn) {
   return `codex:${sessionId || 'unknown'}:${turn ?? 'unknown'}`;
 }
 
-// The Hub has no `unknown`, and `unused` carries a soft negative there; a
-// partial reuse at tier none weighs nothing either way.
-const UNKNOWN_APPLIED_AS = 'partial';
+// The model follows a strategy injected into its turn, so an injection is a use; whether it helped is
+// what the outcome, the check, the next prompt and the edits' retention tell.
+const APPLIED = 'used';
 
-function immediateEvidenceOf({ checks, applied, reasonKind }) {
+function immediateEvidenceOf({ checks, reasonKind }) {
   const check = checkEvidenceOf(checks);
-  const isKnown = applied !== UNKNOWN;
   return {
-    tier: check && isKnown ? 'L1' : 'none',
-    applied: isKnown ? applied : UNKNOWN_APPLIED_AS,
+    tier: check ? 'L1' : 'none',
+    applied: APPLIED,
     ...(check && { check }),
     aborted: reasonKind === 'aborted',
     stage: 'immediate',
@@ -42,13 +40,13 @@ function reportOf({ assetId, taskId, outcome, reason, evidence }) {
   return { asset_id: assetId, outcome, task_id: taskId, reason, evidence };
 }
 
-export function immediateReportOf({ asset, sessionId, turn, reasonKind, checks, applied }) {
-  const evidence = immediateEvidenceOf({ checks, applied, reasonKind });
+export function immediateReportOf({ asset, sessionId, turn, reasonKind, checks }) {
+  const evidence = immediateEvidenceOf({ checks, reasonKind });
   return reportOf({
     assetId: asset.assetId,
     taskId: turnTaskId(sessionId, turn),
     outcome: immediateOutcomeOf(evidence, reasonKind),
-    reason: `Injected by Evolver into Codex turn ${turn}; applied: ${applied}; ${checkPhrase(evidence.check)}.`,
+    reason: `Injected by Evolver into Codex turn ${turn}; ${checkPhrase(evidence.check)}.`,
     evidence,
   });
 }

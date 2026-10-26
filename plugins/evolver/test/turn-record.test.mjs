@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { patchApplied, patchedContent, patchedPaths } from '../lib/apply-patch.mjs';
+import { patchApplied, patchedPaths } from '../lib/apply-patch.mjs';
 import { noteOf, turnRecordOf } from '../lib/turn-record.mjs';
 
 const PATCH = [
@@ -17,14 +17,13 @@ const PATCH = [
   '*** End Patch',
 ].join('\n');
 
-test('a patch names every file it touches and the lines it adds', () => {
+test('a patch names every file it touches, and says whether it applied', () => {
   assert.deepEqual(patchedPaths(PATCH), ['src/lru.js', 'src/old.js', 'src/new.js', 'src/gone.js']);
-  assert.equal(patchedContent(PATCH), 'export const cache = new Map();\nconst a = 2;');
   assert.equal(patchApplied('Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess. Updated the following files:'), true);
   assert.equal(patchApplied('Exit code: 1\nOutput:\napply_patch verification failed'), false);
 });
 
-test('a turn record keeps commands, checks with their verdict, touched paths and applied edits', () => {
+test('a turn record keeps commands, checks with their verdict, touched paths and the files applied patches edited', () => {
   const record = turnRecordOf([
     { kind: 'before', path: '/p/src/lru.js', hash: 'absent' },
     noteOf({ tool_name: 'Bash', tool_input: { command: 'ls src' }, tool_response: 'lru.js' }),
@@ -36,7 +35,7 @@ test('a turn record keeps commands, checks with their verdict, touched paths and
   ]);
   assert.deepEqual(record.commands, ['ls src', 'npm test', 'npm test']);
   assert.deepEqual(record.checks, [{ command: 'npm test', failed: true }, { command: 'npm test', failed: false }]);
-  assert.deepEqual(record.edits, ['export const cache = new Map();\nconst a = 2;']);
+  assert.deepEqual(record.edits, ['src/lru.js', 'src/old.js', 'src/new.js', 'src/gone.js']);
   assert.equal(record.paths.filter((file) => file === 'src/lru.js').length, 2);
   assert.deepEqual([...record.editedBefore], [['/p/src/lru.js', 'absent']]);
   assert.equal(record.answer, '');
@@ -47,7 +46,7 @@ test('a patch applied through the shell counts as an edit, beside the command an
   const record = turnRecordOf([noteOf({ tool_name: 'Bash', tool_input: { command }, tool_response: 'Success. Updated the following files:\nA src/lru.js\nℹ pass 1\nℹ fail 0' })]);
   assert.deepEqual(record.commands, [command]);
   assert.deepEqual(record.checks, [{ command: command.slice(0, 200), failed: false }]);
-  assert.deepEqual(record.edits, ['export const cache = new Map();\nconst a = 2;']);
+  assert.deepEqual(record.edits, ['src/lru.js', 'src/old.js', 'src/new.js', 'src/gone.js']);
   assert.ok(record.paths.includes('src/new.js'));
 });
 

@@ -1,8 +1,8 @@
 # Evolver — Codex plugin
 
 Evolver for Codex, powered by [Evolver](https://github.com/EvoMap/evolver) (`@evomap/evolver`) and [EvoMap](https://evomap.ai):
-before each prompt it recalls one proven strategy, grades how the turn reused it on evidence (the checks the
-turn ran, whether its edits were kept, your next reply), reports that back to the EvoMap network, and distills
+before each prompt it recalls one proven strategy, grades how the turn that used it went on evidence (the checks
+the turn ran, whether its edits were kept, your next reply), reports that back to the EvoMap network, and distills
 the session's verified work into a new Gene when the session ends.
 
 The plugin runs entirely from Codex hooks. It registers **no tools and no skill**, so nothing of Evolver enters
@@ -17,7 +17,7 @@ plugin's `scripts/evolver.mjs`.
 | `SessionStart` | Reports the previous session's kept or reverted edits (retention) and the open strategies of a killed session (aborted), starts Evolver if it is missing or too old, and distills leftover candidates — all in a detached background worker. Adds no context, except a one-off notice when it installed, upgraded or could not start Evolver. |
 | `UserPromptSubmit` | Recalls by the prompt text (`POST /asset/fetch {text}` on the local Proxy) and adds the best strategy as `additionalContext`; labels the previous turn's reuse from this prompt (correction or praise) and drops its candidate on a correction. |
 | `PreToolUse` (`Bash`, `apply_patch`) | Hashes the files a patch is about to touch, for the retention report. |
-| `PostToolUse` (`Bash`, `apply_patch`) | Notes the turn's commands, checks (test, build, lint, type check) with pass or fail, touched paths and the code its patches added. |
+| `PostToolUse` (`Bash`, `apply_patch`) | Notes the turn's commands, checks (test, build, lint, type check) with pass or fail, touched paths and the files its patches edited. |
 | `Stop` | Reports every strategy injected into the turn; makes the turn the session's distillation candidate when it ended verified. A continuation another Stop hook starts joins the turn: its work re-judges the candidate (the reports have already gone out). |
 | `Interrupt` (Codex 0.150+) | Reports the turn's strategies as aborted. |
 | `SessionEnd` (Codex 0.145+) | Closes a turn still open as one that ended on an error (Codex interrupts a running turn before it), reports what is left as aborted, closes the candidate and starts its distillation in the background. Keeps the session's turn counter, so a resumed thread never repeats a task id. |
@@ -73,8 +73,9 @@ node ~/.codex/plugins/cache/evomap/evolver/<version>/scripts/evolver.mjs <comman
 
 ## Session-end distillation
 
-A turn that ended completed (`Stop`), used tools, passed its last check and reused no injected strategy leaves a
-candidate in `~/.evolver/state/codex-distill-pending.json`; a later verified turn replaces it, and a next prompt
+A turn that ended completed (`Stop`), used tools and passed its last check leaves a candidate in
+`~/.evolver/state/codex-distill-pending.json`, a turn that reused an injected strategy too (the engine's intake
+drops a Gene that repeats one it already has); a later verified turn replaces it, and a next prompt
 that reads as a correction drops it (a distillation already running sees that and stops). When the session ends,
 a detached worker runs Codex itself headless on the session's model —
 `codex exec --ephemeral --json --sandbox read-only --disable hooks --disable plugins --disable shell_tool …` with
@@ -99,15 +100,14 @@ Every strategy injected into a turn is reported through the Proxy's `POST /asset
 
 | Report | When | `task_id` | `evidence` |
 |---|---|---|---|
-| Turn end | `Stop`, `Interrupt`, or the next prompt after a turn that ended on an error | `codex:<session>:<turn>` | `tier` `L1` when the turn ran a test, build, lint or type check, else `none`; `applied`; `check` `{kind, passed, fail_then_pass}` of the last check; `aborted`; `stage: immediate` |
-| Correction | the next prompt says the answer did not hold, or approves it | `…:correction` | `tier: L3`, `applied`, `stage: correction` |
-| Retention | the next session in the same project finds the turn's edits kept or reverted | `…:retention` | `tier: L2`, `applied`, `stage: retention` |
-| Aborted | the session ends, or is killed, before the turn ends (a killed session's go out at the next session start, once its Codex process is gone) | `codex:<session>:<turn>` | `tier: none`, `applied: partial`, `aborted: true`, `stage: immediate` |
+| Turn end | `Stop`, `Interrupt`, or the next prompt after a turn that ended on an error | `codex:<session>:<turn>` | `tier` `L1` when the turn ran a test, build, lint or type check, else `none`; `applied: used`; `check` `{kind, passed, fail_then_pass}` of the last check; `aborted`; `stage: immediate` |
+| Correction | the next prompt says the answer did not hold, or approves it | `…:correction` | `tier: L3`, `applied: used`, `stage: correction` |
+| Retention | the next session in the same project finds the turn's edits kept or reverted | `…:retention` | `tier: L2`, `applied: used`, `stage: retention` |
+| Aborted | the session ends, or is killed, before the turn ends (a killed session's go out at the next session start, once its Codex process is gone) | `codex:<session>:<turn>` | `tier: none`, `applied: used`, `aborted: true`, `stage: immediate` |
 
-- **`applied`** compares the strategy's numbered steps with the turn's shell commands, touched paths, the code
-  its patches added (200,000 characters a turn) and the final answer: `used` when half the steps show up,
-  `partial` when fewer do, `unused` when none do. A turn that left nothing to compare is sent as tier `none` with
-  `applied: partial`, and its reason says `applied: unknown`.
+- **`applied`** is always `used`: the model follows a strategy injected into its turn. Whether the strategy
+  helped is what the outcome says, judged by the turn's last check (or how the turn ended when it ran none), the
+  next prompt and whether its edits were kept.
 - **Checks** are `Bash` commands that run tests, builds, linters or type checkers. Codex hands the `Bash` hook
   the bare output, not the exit code, so a check fails on failure output or a timeout; a result formatted with
   an `Exit code:` header fails on a non-zero code. A command still running at its wait limit is pending until
@@ -117,7 +117,7 @@ Every strategy injected into a turn is reported through the Proxy's `POST /asset
 - **Delivery.** Reports wait in `~/.evolver/state/codex-reports-outbox.json` and are retried by the background
   worker at every turn end, follow-up prompt and session start for 8 days. One the Hub refuses as invalid is
   settled as rejected and never resent. Reports with evidence are also written once to the local root event log.
-- Reasons name the turn, the applied verdict and the check kind, never the prompt, a command or code, and the
+- Reasons name the turn and the check kind, never the prompt, a command or code, and the
   prompt loses keys and tokens before recall sends it.
 
 ## Develop

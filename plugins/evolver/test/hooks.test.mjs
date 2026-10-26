@@ -112,7 +112,7 @@ test('session start adds nothing to the context when Evolver is set up', async (
   assert.deepEqual(await session('s-quiet').start(), {});
 });
 
-test('the turn end reports the strategy with the turn\'s own evidence and leaves no candidate for a reused one', async () => {
+test('the turn end reports the strategy as used with the turn\'s own evidence, and the reused turn is a candidate too', async () => {
   await startSandbox();
   const s = session('s-lru');
   await lruTurn(s);
@@ -122,10 +122,10 @@ test('the turn end reports the strategy with the turn\'s own evidence and leaves
     asset_id: ASSET_ID,
     outcome: 'success',
     task_id: 'codex:s-lru:1',
-    reason: 'Injected by Evolver into Codex turn 1; applied: used; last test passed after failing earlier.',
+    reason: 'Injected by Evolver into Codex turn 1; last test passed after failing earlier.',
     evidence: { tier: 'L1', applied: 'used', check: { kind: 'test', passed: true, fail_then_pass: true }, aborted: false, stage: 'immediate' },
   });
-  assert.deepEqual(candidates(), {}, 'asset_reused');
+  assert.equal(candidates()['s-lru']?.turn, 1);
 });
 
 test('a correction in the next prompt sends an L3 follow-up under :correction', async () => {
@@ -176,8 +176,8 @@ test('a turn still open at session end ended on an error: Codex interrupts a run
     asset_id: ASSET_ID,
     outcome: 'failed',
     task_id: 'codex:s-gone:1',
-    reason: 'Injected by Evolver into Codex turn 1; applied: unknown; no check ran.',
-    evidence: { tier: 'none', applied: 'partial', aborted: false, stage: 'immediate' },
+    reason: 'Injected by Evolver into Codex turn 1; no check ran.',
+    evidence: { tier: 'none', applied: 'used', aborted: false, stage: 'immediate' },
   });
 });
 
@@ -272,7 +272,7 @@ test("a killed session's open strategies are reported aborted at the next sessio
   const [report] = await waitFor(() => proxy.of('/asset/reuse-result'));
   assert.equal(report.asset_id, 'sha256:orphan');
   assert.equal(report.task_id, 'codex:s-killed:4');
-  assert.deepEqual(report.evidence, { tier: 'none', applied: 'partial', aborted: true, stage: 'immediate' });
+  assert.deepEqual(report.evidence, { tier: 'none', applied: 'used', aborted: true, stage: 'immediate' });
 });
 
 test('a verified turn becomes the candidate; a failed check leaves none, and a correction drops it', async () => {

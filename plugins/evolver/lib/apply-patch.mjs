@@ -1,5 +1,4 @@
 const FILE_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/;
-const ADDED_LINE = /^\+(?!\+\+ )/;
 const APPLIED = /^Exit code: 0\b|^Success\./m;
 const EMBEDDED_PATCH = /^\*\*\* Begin Patch$[\s\S]*?^\*\*\* End Patch$/m;
 
@@ -19,14 +18,6 @@ export function patchedPaths(patch) {
     if (file && !paths.includes(file.trim())) paths.push(file.trim());
   }
   return paths;
-}
-
-export function patchedContent(patch) {
-  return String(patch ?? '')
-    .split('\n')
-    .filter((line) => ADDED_LINE.test(line))
-    .map((line) => line.slice(1))
-    .join('\n');
 }
 
 export function patchApplied(response) {

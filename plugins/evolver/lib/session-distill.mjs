@@ -20,16 +20,15 @@ const MAX_ATTEMPTS = 3;
 export const pendingPath = () => statePath('codex-distill-pending.json');
 
 /**
- * Why a finished turn leaves no candidate, or null when it does. A turn that reused an injected strategy
- * adds evidence to that asset through its reuse report rather than a near-copy of it; a chat reply without a
- * single command has no method to keep.
+ * Why a finished turn leaves no candidate, or null when it does. A chat reply without a single command has no
+ * method to keep. A turn that reused an injected strategy is distilled too: the engine's intake drops a Gene
+ * that repeats one it already has.
  */
-export function skipReason(reasonKind, record, { reusedAsset = false } = {}) {
+export function skipReason(reasonKind, record) {
   if (reasonKind !== 'completed') return 'not_completed';
   if (!record.answer) return 'no_answer';
   if (record.checks.at(-1)?.failed) return 'failed_check';
   if (record.commands.length === 0 && record.edits.length === 0) return 'no_tool_use';
-  if (reusedAsset) return 'asset_reused';
   return null;
 }
 
