@@ -77,7 +77,7 @@ export async function fakeProxy({ assets = [] } = {}) {
     if (req.url === '/proxy/status') return reply(200, { status: 'running' });
     if (req.url === '/asset/fetch') return reply(200, { assets });
     if (req.url === '/asset/reuse-result') return reply(200, { recorded: true, eligible: true, counted: true, weight: 1 });
-    if (req.url === '/conversation/distill') return reply(200, { id: 'gene_test' });
+    if (req.url === '/conversation/distill') return reply(200, { id: 'gene_test', ok: true, status: 'stored', gene: { asset_id: 'gene_test' }, capsule: { asset_id: 'capsule_x' } });
     return reply(404, {});
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
