@@ -1,3 +1,4 @@
+import { outcomeOfDistill } from './distill-receipt.mjs';
 import { ownerIsGone } from './process-owner.mjs';
 import { withoutSecrets } from './redact.mjs';
 import { readState, statePath, updateState } from './state-file.mjs';
@@ -239,7 +240,7 @@ export async function distillCandidate({ proxyFetch, runModel, candidate, focus,
     if (!args) return { status: 'unparsed', usage };
     if (!isCurrent()) return { status: 'dropped', usage };
     const result = await proxyFetch('POST', '/conversation/distill', distillBody(candidate, args, usage), signal);
-    return result?.ok ? { status: 'sent', usage, data: result.data } : { status: 'failed', error: String(result?.error) };
+    return outcomeOfDistill(result, usage);
   } catch (error) {
     if (cancel?.aborted) return { status: 'dropped' };
     if (error?.code === 'ENOENT') return { status: 'no_model', error: 'no codex executable to run the distillation' };
